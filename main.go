@@ -2,65 +2,80 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
+	"github.com/MakeNowJust/heredoc/v2"
+	"github.com/binaryphile/lilleygram/controller"
+	. "github.com/binaryphile/lilleygram/extensions"
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
 	"log"
 
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
-	// Create the handlers for a domain
+	// open the database
 
-	okHandler := gemini.HandlerFunc(func(w gemini.ResponseWriter, r *gemini.Request) {
-		_, err := w.Write([]byte("OK"))
+	db, err := sql.Open("sqlite3", osmust.Getenv("GMNI_SQLITE_FILE"))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		err := db.Close()
 		if err != nil {
-			log.Printf("couldn't write response: %s", err)
+			log.Printf("couldn't close database file: %s", err)
 		}
-	})
+	}()
 
-	helloHandler := gemini.HandlerFunc(func(w gemini.ResponseWriter, r *gemini.Request) {
-		_, err := w.Write([]byte("# Hello, user!\n"))
-		if err != nil {
-			log.Printf("couldn't write response: %s", err)
-		}
+	// create a controller
 
-		if r.Certificate.ID == "" {
-			_, err = w.Write([]byte("You're not authenticated"))
+	siteController := controller.New(db)
+
+	// Extend the controller Home method with authentication
+	homeHandler := gemini.HandlerFunc(ExtendFnHandler(
+		siteController.Home,
+		WithOptionalAuthentication(db),
+	))
+
+	userHandler := gemini.HandlerFunc(ExtendFnHandler(
+		siteController.Users,
+		WithAuthentication(db, func(certID, _ string) bool {
+			var count int
+
+			err := db.QueryRow(heredoc.Doc(`
+				SELECT count(*) FROM users
+				WHERE cert_id = $1
+			`), certID).Scan(&count)
 			if err != nil {
-				log.Printf("couldn't write response: %s", err)
+				panic(err)
 			}
 
-			return
-		}
+			return count > 0
+		}),
+	))
 
-		_, err = w.Write([]byte(fmt.Sprintf("Certificate: %v\n", r.Certificate.ID)))
-		if err != nil {
-			log.Printf("couldn't write response: %s", err)
-		}
-	})
+	// create a router
 
-	// Create a router for gemini://host/require_cert and gemini://host/public
+	router := mux.NewMux()
 
-	routerA := mux.NewMux()
+	router.AddRoute("/", homeHandler)
 
-	// Let's make /require_cert require the client to be authenticated.
-	routerA.AddRoute("/require_cert", gemini.RequireCertificateHandler(helloHandler, nil))
+	router.AddRoute("/users", userHandler)
 
-	routerA.AddRoute("/public", okHandler)
-
-	// Set up the domain handlers.
+	// set up the domain handler
 
 	ctx := context.Background()
 
 	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("GMNI_X509_CERT_FILE"), osmust.Getenv("GMNI_X509_KEY_FILE"))
 
-	a := gemini.NewDomainHandler("localhost", certificate, routerA)
+	domainHandler := gemini.NewDomainHandler("localhost", certificate, router)
 
 	// Start the server
-	err := gemini.ListenAndServe(ctx, ":1965", a)
+	err = gemini.ListenAndServe(ctx, ":1965", domainHandler)
 	if err != nil {
 		log.Fatal("error:", err)
 	}
