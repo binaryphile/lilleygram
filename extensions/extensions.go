@@ -55,24 +55,6 @@ func WithAuthentication(db *sql.DB, authorizer func(certID, certKey string) bool
 	}
 }
 
-func WithDump() FnHandlerExtension {
-	return func(handler FnHandler) FnHandler {
-		return func(writer gemini.ResponseWriter, request *gemini.Request) {
-			defer func() {
-				panik := recover()
-				if panik != nil {
-					log.Printf("panic: %s", panik)
-					panic(panik)
-				}
-			}()
-
-			log.Printf("request: %s", request.URL.String())
-
-			handler(writer, request)
-		}
-	}
-}
-
 func WithOptionalAuthentication(db *sql.DB) FnHandlerExtension {
 	return func(handler FnHandler) FnHandler {
 		return func(w gemini.ResponseWriter, request *gemini.Request) {

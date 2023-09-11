@@ -13,13 +13,13 @@ import (
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
 	// open the database
 
-	db, err := sql.Open("sqlite3", osmust.Getenv("GMNI_SQLITE_FILE"))
+	db, err := sql.Open("sqlite", osmust.Getenv("GMNI_SQLITE_FILE"))
 	if err != nil {
 		log.Fatalf("couldn't open sql db: %s", err)
 	}
@@ -39,7 +39,6 @@ func main() {
 	homeHandler := gemini.HandlerFunc(ExtendFnHandler(
 		siteController.Home,
 		WithOptionalAuthentication(db),
-		WithDump(),
 	))
 
 	userHandler := gemini.HandlerFunc(ExtendFnHandler(
