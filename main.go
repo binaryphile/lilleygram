@@ -21,7 +21,7 @@ func main() {
 
 	db, err := sql.Open("sqlite3", osmust.Getenv("GMNI_SQLITE_FILE"))
 	if err != nil {
-		panic(err)
+		log.Fatalf("couldn't open sql db: %s", err)
 	}
 
 	defer func() {
@@ -39,6 +39,7 @@ func main() {
 	homeHandler := gemini.HandlerFunc(ExtendFnHandler(
 		siteController.Home,
 		WithOptionalAuthentication(db),
+		WithDump(),
 	))
 
 	userHandler := gemini.HandlerFunc(ExtendFnHandler(
@@ -51,7 +52,7 @@ func main() {
 				WHERE cert_id = $1
 			`), certID).Scan(&count)
 			if err != nil {
-				panic(err)
+				log.Panicf("couldn't query users: %s", err)
 			}
 
 			return count > 0
@@ -72,7 +73,7 @@ func main() {
 
 	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("GMNI_X509_CERT_FILE"), osmust.Getenv("GMNI_X509_KEY_FILE"))
 
-	domainHandler := gemini.NewDomainHandler("localhost", certificate, router)
+	domainHandler := gemini.NewDomainHandler(osmust.Getenv("GMNI_SERVER_NAME"), certificate, router)
 
 	// Start the server
 	err = gemini.ListenAndServe(ctx, ":1965", domainHandler)

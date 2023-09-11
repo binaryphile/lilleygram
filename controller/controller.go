@@ -7,6 +7,7 @@ import (
 	"github.com/a-h/gemini"
 	. "github.com/binaryphile/lilleygram/extensions"
 	"github.com/binaryphile/lilleygram/must/osmust"
+	"log"
 	"text/template"
 )
 
@@ -38,12 +39,12 @@ func (x Controller) Home(writer gemini.ResponseWriter, request *gemini.Request) 
 
 	tmpl, err := template.New("home.page.user.tmpl").ParseFiles("gemtext/home.page.user.tmpl")
 	if err != nil {
-		panic(err)
+		log.Panicf("couldn't parse templates: %s", err)
 	}
 
 	err = tmpl.Execute(writer, user)
 	if err != nil {
-		panic(err)
+		log.Panicf("couldn't execute template: %s", err)
 	}
 }
 
@@ -59,11 +60,11 @@ func (x Controller) Users(writer gemini.ResponseWriter, request *gemini.Request)
 		WHERE id = $1
 	`), user.ID).Scan(&firstName, &lastName)
 	if err != nil {
-		panic(err)
+		log.Panicf("couldn't query users: %s", err)
 	}
 
 	_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", user.ID, firstName, lastName, user.UserName)))
 	if err != nil {
-		panic(err)
+		log.Panicf("couldn't write response: %s", err)
 	}
 }

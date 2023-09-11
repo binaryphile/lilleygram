@@ -21,8 +21,8 @@ type (
 	contextKey string
 )
 
-func ExtendFnHandler(do FnHandler, extensions ...FnHandlerExtension) FnHandler {
-	extended := do
+func ExtendFnHandler(handler FnHandler, extensions ...FnHandlerExtension) FnHandler {
+	extended := handler
 
 	for _, extend := range extensions {
 		extended = extend(extended)
@@ -31,12 +31,44 @@ func ExtendFnHandler(do FnHandler, extensions ...FnHandlerExtension) FnHandler {
 	return extended
 }
 
+func UserFromContext(ctx Context) (_ struct {
+	Avatar   string
+	ID       uint64
+	UserName string
+}, ok bool) {
+	user, ok := ctx.Value(keyUser).(struct {
+		Avatar   string
+		ID       uint64
+		UserName string
+	})
+
+	return user, ok
+}
+
 func WithAuthentication(db *sql.DB, authorizer func(certID, certKey string) bool) FnHandlerExtension {
 	return func(handler FnHandler) FnHandler {
 		return func(writer gemini.ResponseWriter, request *gemini.Request) {
 			contextHandler := gemini.HandlerFunc(WithOptionalAuthentication(db)(handler))
 
 			gemini.RequireCertificateHandler(contextHandler, authorizer).ServeGemini(writer, request)
+		}
+	}
+}
+
+func WithDump() FnHandlerExtension {
+	return func(handler FnHandler) FnHandler {
+		return func(writer gemini.ResponseWriter, request *gemini.Request) {
+			defer func() {
+				panik := recover()
+				if panik != nil {
+					log.Printf("panic: %s", panik)
+					panic(panik)
+				}
+			}()
+
+			log.Printf("request: %s", request.URL.String())
+
+			handler(writer, request)
 		}
 	}
 }
@@ -69,12 +101,12 @@ func WithOptionalAuthentication(db *sql.DB) FnHandlerExtension {
 				for rows.Next() {
 					err = rows.Scan(&userAvatar, &userID, &userName)
 					if err != nil {
-						panic(err)
+						log.Panicf("couldn't scan row: %s", err)
 					}
 				}
 
 				if err = rows.Err(); err != nil {
-					panic(err)
+					log.Panicf("error reading rows: %s", err)
 				}
 
 				if userName != "" {
@@ -93,18 +125,4 @@ func WithOptionalAuthentication(db *sql.DB) FnHandlerExtension {
 			handler(w, request)
 		}
 	}
-}
-
-func UserFromContext(ctx Context) (_ struct {
-	Avatar   string
-	ID       uint64
-	UserName string
-}, ok bool) {
-	user, ok := ctx.Value(keyUser).(struct {
-		Avatar   string
-		ID       uint64
-		UserName string
-	})
-
-	return user, ok
 }
