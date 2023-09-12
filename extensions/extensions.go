@@ -2,7 +2,9 @@ package extensions
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"github.com/MakeNowJust/heredoc/v2"
 	"github.com/a-h/gemini"
 	. "github.com/binaryphile/lilleygram/shortcuts"
@@ -61,34 +63,21 @@ func WithOptionalAuthentication(db *sql.DB) FnHandlerExtension {
 			certID := request.Certificate.ID
 
 			if certID != "" {
-				rows, err := db.Query(heredoc.Doc(`
-					SELECT avatar, id, user_name FROM users
-					WHERE cert_id = ?
-				`), certID)
-				if err != nil {
-					panic(err)
-				}
+				hash := sha256.Sum256([]byte(certID))
 
-				defer func() {
-					err = rows.Close()
-					if err != nil {
-						log.Printf("couldn't close rows: %s", err)
-					}
-				}()
+				hexHash := hex.EncodeToString(hash[:])
 
 				var userAvatar, userName string
 
 				var userID uint64
 
-				for rows.Next() {
-					err = rows.Scan(&userAvatar, &userID, &userName)
-					if err != nil {
-						log.Panicf("couldn't scan row: %s", err)
-					}
-				}
-
-				if err = rows.Err(); err != nil {
-					log.Panicf("error reading rows: %s", err)
+				err := db.QueryRow(heredoc.Doc(`
+					SELECT avatar, users.user_id, user_name FROM users
+					INNER JOIN certificates ON users.user_id = certificates.user_id
+					WHERE cert_sha256 = $1
+				`), hexHash).Scan(&userAvatar, &userID, &userName)
+				if err != nil {
+					log.Panicf("couldn't query user from db: %s", err)
 				}
 
 				if userName != "" {

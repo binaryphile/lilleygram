@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"github.com/MakeNowJust/heredoc/v2"
 	"github.com/binaryphile/lilleygram/controller"
 	. "github.com/binaryphile/lilleygram/extensions"
@@ -44,12 +46,24 @@ func main() {
 	userHandler := gemini.HandlerFunc(ExtendFnHandler(
 		siteController.Users,
 		WithAuthentication(db, func(certID, _ string) bool {
+			h := sha256.New()
+
+			_, err := h.Write([]byte(certID))
+			if err != nil {
+				log.Panicf("couldn't hash certificate ID: %s", err)
+			}
+
+			hash := sha256.Sum256([]byte(certID))
+
+			hexHash := hex.EncodeToString(hash[:])
+
 			var count int
 
-			err := db.QueryRow(heredoc.Doc(`
+			err = db.QueryRow(heredoc.Doc(`
 				SELECT count(*) FROM users
-				WHERE cert_id = $1
-			`), certID).Scan(&count)
+				INNER JOIN certificates ON users.user_id = certificates.user_id
+				WHERE cert_sha256 = $1
+			`), hexHash).Scan(&count)
 			if err != nil {
 				log.Panicf("couldn't query users: %s", err)
 			}
