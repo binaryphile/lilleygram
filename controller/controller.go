@@ -2,69 +2,32 @@ package controller
 
 import (
 	"database/sql"
-	"fmt"
-	"github.com/MakeNowJust/heredoc/v2"
-	"github.com/a-h/gemini"
 	. "github.com/binaryphile/lilleygram/extensions"
-	"github.com/binaryphile/lilleygram/must/osmust"
-	"log"
-	"text/template"
+	"github.com/binaryphile/lilleygram/opt"
 )
 
-type Controller struct {
-	db *sql.DB
-}
+type (
+	Controller struct {
+		db       *sql.DB
+		handlers map[string]FnHandler
+	}
+)
 
-func New(db *sql.DB) Controller {
-	return Controller{
+func New(db *sql.DB, extensions map[string][]FnHandlerExtension) Controller {
+	c := Controller{
 		db: db,
 	}
-}
 
-func (x Controller) Home(writer gemini.ResponseWriter, request *gemini.Request) {
-	if request.URL.Path != "/" {
-		gemini.NotFound(writer, request)
-		return
+	c.handlers = map[string]FnHandler{
+		"home":  home(c),
+		"users": users(c),
 	}
 
-	user, userOk := UserFromContext(request.Context)
+	for methodName, handler := range c.handlers {
+		handlerExtensions := opt.OfIndex(extensions, methodName)
 
-	if !userOk {
-		handler := gemini.FileContentHandler("gemtext/home.page.tmpl", osmust.Open("gemtext/home.page.tmpl"))
-
-		handler.ServeGemini(writer, request)
-
-		return
+		c.handlers[methodName] = ExtendFnHandler(handler, handlerExtensions.OrZero()...)
 	}
 
-	tmpl, err := template.New("home.page.user.tmpl").ParseFiles("gemtext/home.page.user.tmpl")
-	if err != nil {
-		log.Panicf("couldn't parse templates: %s", err)
-	}
-
-	err = tmpl.Execute(writer, user)
-	if err != nil {
-		log.Panicf("couldn't execute template: %s", err)
-	}
-}
-
-func (x Controller) Users(writer gemini.ResponseWriter, request *gemini.Request) {
-	user, _ := UserFromContext(request.Context)
-
-	var firstName, lastName string
-
-	err := x.db.QueryRow(heredoc.Doc(`
-		SELECT first_name
-			,last_name
-		FROM users
-		WHERE id = $1
-	`), user.ID).Scan(&firstName, &lastName)
-	if err != nil {
-		log.Panicf("couldn't query users: %s", err)
-	}
-
-	_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", user.ID, firstName, lastName, user.UserName)))
-	if err != nil {
-		log.Panicf("couldn't write response: %s", err)
-	}
+	return c
 }

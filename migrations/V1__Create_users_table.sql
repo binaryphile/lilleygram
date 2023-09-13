@@ -5,6 +5,6 @@ CREATE TABLE users
     last_name  TEXT    NOT NULL,
     user_name  TEXT    NOT NULL,
     avatar     TEXT    NOT NULL,
-    start      INTEGER NOT NULL,
-    stop       INTEGER NOT NULL
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    expiry     INTEGER NOT NULL DEFAULT 0
 );

@@ -1,5 +1,5 @@
-INSERT INTO users (first_name, last_name, user_name, avatar, start, stop)
-VALUES ('Ted', 'Lilley', 'KingDad', '👑', unixepoch(), 0);
+INSERT INTO users (first_name, last_name, user_name, avatar)
+VALUES ('Ted', 'Lilley', 'KingDad', '👑');
 
 INSERT INTO emails (address, user_id)
 VALUES ('admin@lilleygram.com', 1);
