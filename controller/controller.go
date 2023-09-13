@@ -19,8 +19,9 @@ func New(db *sql.DB, extensions map[string][]FnHandlerExtension) Controller {
 	}
 
 	c.handlers = map[string]FnHandler{
-		"home":  home(c),
-		"users": users(c),
+		"certificates": certificatesHandler(c),
+		"home":         homeHandler(c),
+		"users":        usersHandler(c),
 	}
 
 	for methodName, handler := range c.handlers {

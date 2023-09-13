@@ -1,0 +1,14 @@
+{{template "base" .}}
+{{define "main"}}
+{{with .User}}
+## {{.Avatar}} {{.UserName}}'s Certificates
+{{end}}
+{{if .Certificates}}
+Created At				Expires		SHA256
+{{range .Certificates}}
+{{.CreatedAt}}		{{.Expiry}}		{{.CertSHA256}}
+{{end}}
+{{else}}
+There's nothing to see here yet!
+{{end}}
+{{end}}

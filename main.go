@@ -34,8 +34,9 @@ func main() {
 	// create a controller
 
 	siteController := controller.New(db, map[string][]FnHandlerExtension{
-		"home":  {WithOptionalAuthentication(db)},
-		"users": {WithAuthentication(db, authorizer(db))},
+		"certificates": {WithAuthentication(db, authorizer(db))},
+		"home":         {WithOptionalAuthentication(db)},
+		"users":        {WithAuthentication(db, authorizer(db))},
 	})
 
 	// set up the domain handler
