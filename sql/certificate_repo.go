@@ -1,20 +1,15 @@
-package repository
+package sql
 
 import (
 	"database/sql"
-	. "github.com/MakeNowJust/heredoc/v2"
+	"github.com/binaryphile/lilleygram/model"
 	"github.com/binaryphile/lilleygram/opt"
+	. "github.com/binaryphile/lilleygram/shortcuts"
 	"log"
 	"time"
 )
 
 type (
-	Certificate struct {
-		CertSHA256 string
-		CreatedAt  string
-		Expiry     string
-	}
-
 	CertificateRepo struct {
 		db *sql.DB
 	}
@@ -26,10 +21,10 @@ func NewCertificateRepo(db *sql.DB) CertificateRepo {
 	}
 }
 
-func (r CertificateRepo) Add(sha256 string, expiry, userID uint64) (_ string, err error) {
-	stmt := Doc(`
+func (r CertificateRepo) Add(sha256 string, expiry int64, userID uint64) (_ string, err error) {
+	stmt := Heredoc(`
 		INSERT INTO certificates (cert_sha256, expiry, user_id)
-		VALUES (?, ?, ?)
+		VALUES ($1, $2, $3)
 	`)
 
 	_, err = r.db.Exec(stmt, sha256, expiry, userID)
@@ -40,11 +35,11 @@ func (r CertificateRepo) Add(sha256 string, expiry, userID uint64) (_ string, er
 	return sha256, nil
 }
 
-func (r CertificateRepo) ListByUser(userID uint64) (_ []Certificate, err error) {
-	stmt := Doc(`
+func (r CertificateRepo) ListByUser(userID uint64) (_ []model.Certificate, err error) {
+	stmt := Heredoc(`
 		SELECT cert_sha256, created_at, expiry
 		FROM certificates
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`)
 
 	rows, err := r.db.Query(stmt, userID)
@@ -59,26 +54,28 @@ func (r CertificateRepo) ListByUser(userID uint64) (_ []Certificate, err error) 
 		}
 	}()
 
-	var certificates []Certificate
+	var certificates []model.Certificate
 
 	for rows.Next() {
 		var certSHA256 string
 
-		var createdAt, expiry uint64
+		var createdAt, exp int64
 
-		err = rows.Scan(&certSHA256, &createdAt, &expiry)
+		err = rows.Scan(&certSHA256, &createdAt, &exp)
 		if err != nil {
 			return
 		}
 
+		expiry := opt.OfNonZero(exp)
+
 		toString := opt.Map(func(unixtime int64) string {
-			return time.Unix(unixtime, 0).String()
+			return time.Unix(unixtime, 0).Format(time.RFC1123)
 		})
 
-		certificates = append(certificates, Certificate{
+		certificates = append(certificates, model.Certificate{
 			CertSHA256: certSHA256,
-			CreatedAt:  time.Unix(int64(createdAt), 0).Format(time.RFC822),
-			Expiry:     toString(opt.OfNonZero(int64(expiry))).Or("never"),
+			CreatedAt:  time.Unix(createdAt, 0).Format(time.RFC1123),
+			Expiry:     toString(expiry).Or("never"),
 		})
 	}
 

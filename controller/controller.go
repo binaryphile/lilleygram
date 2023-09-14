@@ -1,34 +1,9 @@
 package controller
 
 import (
-	"database/sql"
-	. "github.com/binaryphile/lilleygram/extensions"
-	"github.com/binaryphile/lilleygram/opt"
+	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 )
 
 type (
-	Controller struct {
-		db       *sql.DB
-		handlers map[string]FnHandler
-	}
+	Controller map[string]Handler
 )
-
-func New(db *sql.DB, extensions map[string][]FnHandlerExtension) Controller {
-	c := Controller{
-		db: db,
-	}
-
-	c.handlers = map[string]FnHandler{
-		"certificates": certificatesHandler(c),
-		"home":         homeHandler(c),
-		"users":        usersHandler(c),
-	}
-
-	for methodName, handler := range c.handlers {
-		handlerExtensions := opt.OfIndex(extensions, methodName)
-
-		c.handlers[methodName] = ExtendFnHandler(handler, handlerExtensions.OrZero()...)
-	}
-
-	return c
-}

@@ -8,9 +8,10 @@ import (
 	"github.com/MakeNowJust/heredoc/v2"
 	"github.com/a-h/gemini"
 	"github.com/binaryphile/lilleygram/controller"
-	. "github.com/binaryphile/lilleygram/extensions"
+	. "github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
+	. "github.com/binaryphile/lilleygram/sql"
 	"log"
 
 	_ "modernc.org/sqlite"
@@ -31,13 +32,30 @@ func main() {
 		}
 	}()
 
-	// create a controller
+	// create controllers
 
-	siteController := controller.New(db, map[string][]FnHandlerExtension{
-		"certificates": {WithAuthentication(db, authorizer(db))},
-		"home":         {WithOptionalAuthentication(db)},
-		"users":        {WithAuthentication(db, authorizer(db))},
-	})
+	certAuthorizer := newCertAuthorizer(db)
+
+	userRepo := NewUserRepo(db)
+
+	withAuthentication := WithAuthentication(userRepo, certAuthorizer)
+
+	userController := controller.NewUserController(
+		userRepo, nil,
+		withAuthentication,
+	)
+
+	certificateRepo := NewCertificateRepo(db)
+
+	certificateController := controller.NewCertificateController(
+		certificateRepo, nil,
+		withAuthentication,
+	)
+
+	homeController := controller.NewHomeController(
+		nil,
+		WithOptionalAuthentication(userRepo),
+	)
 
 	// set up the domain handler
 
@@ -45,7 +63,7 @@ func main() {
 
 	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("LGRAM_X509_CERT_FILE"), osmust.Getenv("LGRAM_X509_KEY_FILE"))
 
-	router := siteController.Router()
+	router := controller.Router(userController, certificateController, homeController)
 
 	domainHandler := gemini.NewDomainHandler(osmust.Getenv("LGRAM_SERVER_NAME"), certificate, router)
 
@@ -56,26 +74,19 @@ func main() {
 	}
 }
 
-func authorizer(db *sql.DB) func(certID string, _ string) bool {
+func newCertAuthorizer(db *sql.DB) func(_, _ string) bool {
 	return func(certID, _ string) bool {
-		h := sha256.New()
-
-		_, err := h.Write([]byte(certID))
-		if err != nil {
-			log.Panicf("couldn't hash certificate ID: %s", err)
-		}
-
 		hash := sha256.Sum256([]byte(certID))
 
-		hexHash := hex.EncodeToString(hash[:])
+		certSHA256 := hex.EncodeToString(hash[:])
 
 		var count int
 
-		err = db.QueryRow(heredoc.Doc(`
+		err := db.QueryRow(heredoc.Doc(`
 				SELECT count(*) FROM users
 				INNER JOIN certificates ON users.user_id = certificates.user_id
 				WHERE cert_sha256 = $1
-			`), hexHash).Scan(&count)
+			`), certSHA256).Scan(&count)
 		if err != nil {
 			log.Panicf("couldn't query users: %s", err)
 		}

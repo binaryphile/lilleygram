@@ -47,12 +47,12 @@ func OfOk[T any](value T) Value[T] {
 	}
 }
 
-func OkOrNot[T, R any](value Value[T], first, second R) R {
+func OkOrNot[T, R any](value Value[T], ifOk, ifNot R) R {
 	if value.ok {
-		return first
+		return ifOk
 	}
 
-	return second
+	return ifNot
 }
 
 func (x Value[T]) Or(other T) T {
