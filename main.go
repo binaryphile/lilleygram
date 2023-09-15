@@ -20,17 +20,8 @@ import (
 func main() {
 	// open the database
 
-	db, err := sql.Open("sqlite", osmust.Getenv("LGRAM_SQLITE_FILE"))
-	if err != nil {
-		log.Fatalf("couldn't open sql db: %s", err)
-	}
-
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			log.Printf("couldn't close database file: %s", err)
-		}
-	}()
+	db, closeDB := openSQL()
+	defer closeDB()
 
 	// create controllers
 
@@ -63,12 +54,12 @@ func main() {
 
 	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("LGRAM_X509_CERT_FILE"), osmust.Getenv("LGRAM_X509_KEY_FILE"))
 
-	router := controller.Router(userController, certificateController, homeController)
+	router := controller.Router(certificateController, homeController, userController)
 
 	domainHandler := gemini.NewDomainHandler(osmust.Getenv("LGRAM_SERVER_NAME"), certificate, router)
 
 	// Start the server
-	err = gemini.ListenAndServe(ctx, ":1965", domainHandler)
+	err := gemini.ListenAndServe(ctx, ":1965", domainHandler)
 	if err != nil {
 		log.Fatal("error:", err)
 	}
@@ -92,5 +83,19 @@ func newCertAuthorizer(db *sql.DB) func(_, _ string) bool {
 		}
 
 		return count > 0
+	}
+}
+
+func openSQL() (db *sql.DB, cleanup func()) {
+	db, err := sql.Open("sqlite", osmust.Getenv("LGRAM_SQLITE_FILE"))
+	if err != nil {
+		log.Fatalf("couldn't open sql db: %s", err)
+	}
+
+	return db, func() {
+		err := db.Close()
+		if err != nil {
+			log.Printf("couldn't close database file: %s", err)
+		}
 	}
 }

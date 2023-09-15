@@ -2,64 +2,72 @@ package controller
 
 import (
 	"fmt"
-	"github.com/binaryphile/lilleygram/controller/shortcuts"
+	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	. "github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/opt"
 	"github.com/binaryphile/lilleygram/sql"
 	"log"
 )
 
-func NewUserController(userRepo sql.UserRepo, specific map[string][]Middleware, general ...Middleware) Controller {
-	c := Controller{
-		"get":  getUser(userRepo),
-		"list": listUsers(userRepo),
+type (
+	UserController struct {
+		handlers map[string]Handler
+		repo     sql.UserRepo
+	}
+)
+
+func NewUserController(repo sql.UserRepo, specific map[string][]Middleware, general ...Middleware) UserController {
+	c := UserController{
+		handlers: make(map[string]Handler),
+		repo:     repo,
 	}
 
-	for methodName, handler := range c {
-		m := opt.OfIndex(specific, methodName)
+	handlers := map[string]Handler{
+		"get":  HandlerFunc(c.Get),
+		"list": HandlerFunc(c.List),
+	}
 
-		c[methodName] = ExtendHandler(handler, m.OrZero()...)
+	for key, handler := range handlers {
+		s := opt.OfIndex(specific, key)
 
-		c[methodName] = ExtendHandler(c[methodName], general...)
+		c.handlers[key] = ExtendHandler(handler, s.OrZero()...)
+
+		c.handlers[key] = ExtendHandler(c.handlers[key], general...)
 	}
 
 	return c
 }
 
-func getUser(userRepo sql.UserRepo) shortcuts.HandlerFunc {
-	return func(writer shortcuts.ResponseWriter, request *shortcuts.Request) {
-		user, ok := UserFromContext(request.Context)
-		if !ok {
-			return
-		}
+func (c UserController) Get(writer ResponseWriter, request *Request) {
+	user, ok := UserFromContext(request.Context)
+	if !ok {
+		return
+	}
 
-		u, err := userRepo.Get(user.ID)
-		if err != nil {
-			log.Panic(err)
-		}
+	u, err := c.repo.Get(user.ID)
+	if err != nil {
+		log.Panic(err)
+	}
 
-		_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", u.ID, u.FirstName, u.LastName, u.UserName)))
-		if err != nil {
-			log.Panic(err)
-		}
+	_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", u.ID, u.FirstName, u.LastName, u.UserName)))
+	if err != nil {
+		log.Panic(err)
 	}
 }
 
-func listUsers(userRepo sql.UserRepo) shortcuts.HandlerFunc {
-	return func(writer shortcuts.ResponseWriter, request *shortcuts.Request) {
-		user, ok := UserFromContext(request.Context)
-		if !ok {
-			return
-		}
+func (c UserController) List(writer ResponseWriter, request *Request) {
+	user, ok := UserFromContext(request.Context)
+	if !ok {
+		return
+	}
 
-		u, err := userRepo.Get(user.ID)
-		if err != nil {
-			log.Panic(err)
-		}
+	u, err := c.repo.Get(user.ID)
+	if err != nil {
+		log.Panic(err)
+	}
 
-		_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", u.ID, u.FirstName, u.LastName, u.UserName)))
-		if err != nil {
-			log.Panic(err)
-		}
+	_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", u.ID, u.FirstName, u.LastName, u.UserName)))
+	if err != nil {
+		log.Panic(err)
 	}
 }

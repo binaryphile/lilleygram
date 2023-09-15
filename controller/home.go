@@ -9,44 +9,52 @@ import (
 	"text/template"
 )
 
-func NewHomeController(specific map[string][]Middleware, general ...Middleware) Controller {
-	c := Controller{
-		"get": getHome,
+type (
+	HomeController struct {
+		handlers map[string]Handler
+	}
+)
+
+func NewHomeController(specific map[string][]Middleware, general ...Middleware) HomeController {
+	c := HomeController{
+		handlers: make(map[string]Handler),
 	}
 
-	for methodName, handler := range c {
-		m := opt.OfIndex(specific, methodName)
+	handlers := map[string]Handler{
+		"get": HandlerFunc(c.Get),
+	}
 
-		c[methodName] = ExtendHandler(handler, m.OrZero()...)
+	for key, handler := range handlers {
+		s := opt.OfIndex(specific, key)
 
-		c[methodName] = ExtendHandler(c[methodName], general...)
+		c.handlers[key] = ExtendHandler(handler, s.OrZero()...)
+
+		c.handlers[key] = ExtendHandler(c.handlers[key], general...)
 	}
 
 	return c
 }
 
-var (
-	getHome = HandlerFunc(func(writer ResponseWriter, request *Request) {
-		user := opt.Of(UserFromContext(request.Context))
+func (c HomeController) Get(writer ResponseWriter, request *Request) {
+	user := opt.Of(UserFromContext(request.Context))
 
-		ts, err := template.ParseFiles(
-			opt.OkOrNot(user, "gemtext/home.page.user.tmpl", "gemtext/home.page.tmpl"),
-			"gemtext/base.layout.tmpl",
-			"gemtext/footer.partial.tmpl",
-		)
+	ts, err := template.ParseFiles(
+		opt.OkOrNot(user, "gemtext/home.page.user.tmpl", "gemtext/home.page.tmpl"),
+		"gemtext/base.layout.tmpl",
+		"gemtext/footer.partial.tmpl",
+	)
+	if err != nil {
+		log.Println(err.Error())
+
+		err := writer.SetHeader(gemini.CodeCGIError, "internal error")
 		if err != nil {
 			log.Println(err.Error())
-
-			err := writer.SetHeader(gemini.CodeCGIError, "internal error")
-			if err != nil {
-				log.Println(err.Error())
-				panic(err)
-			}
+			panic(err)
 		}
+	}
 
-		err = ts.Execute(writer, user.OrZero())
-		if err != nil {
-			log.Panicf("couldn't execute template: %s", err)
-		}
-	})
-)
+	err = ts.Execute(writer, user.OrZero())
+	if err != nil {
+		log.Panicf("couldn't execute template: %s", err)
+	}
+}
