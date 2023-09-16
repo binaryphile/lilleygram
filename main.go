@@ -13,6 +13,7 @@ import (
 	"github.com/binaryphile/lilleygram/must/tlsmust"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -25,9 +26,9 @@ func main() {
 
 	// create controllers
 
-	certAuthorizer := newCertAuthorizer(db)
+	certAuthorizer := certAuthorizerWith(db)
 
-	userRepo := sqlrepo.NewUserRepo(db)
+	userRepo := sqlrepo.NewUserRepo(db, unixNow)
 
 	withAuthentication := WithAuthentication(userRepo, certAuthorizer)
 
@@ -56,7 +57,7 @@ func main() {
 	}
 }
 
-func newCertAuthorizer(db *sql.DB) func(_, _ string) bool {
+func certAuthorizerWith(db *sql.DB) func(_, _ string) bool {
 	return func(certID, _ string) bool {
 		hash := sha256.Sum256([]byte(certID))
 
@@ -89,4 +90,8 @@ func openSQL() (db *sql.DB, cleanup func()) {
 			log.Printf("couldn't close database file: %s", err)
 		}
 	}
+}
+
+func unixNow() int64 {
+	return time.Now().Unix()
 }

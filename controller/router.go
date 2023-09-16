@@ -3,6 +3,7 @@ package controller
 import (
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	. "github.com/binaryphile/lilleygram/middleware"
 )
 
 func Router(
@@ -12,15 +13,19 @@ func Router(
 ) *mux.Mux {
 	router := mux.NewMux()
 
-	router.AddRoute("/", HandlerFunc(homeController.Get))
+	fnHandlers := map[string]FnHandler{
+		"/":                                homeController.Get,
+		"/users":                           userController.List,
+		"/users/{userID}":                  userController.Get,
+		"/users/{userID}/password":         userController.PasswordGet,
+		"/users/{userID}/password/add":     userController.PasswordAdd,
+		"/users/{userID}/certificates":     certificateController.List,
+		"/users/{userID}/certificates/add": certificateController.Add,
+	}
 
-	router.AddRoute("/users", HandlerFunc(userController.List))
-
-	router.AddRoute("/users/{userID}", HandlerFunc(userController.Get))
-
-	router.AddRoute("/users/{userID}/certificates", HandlerFunc(certificateController.List))
-
-	router.AddRoute("/users/{userID}/certificates/add", HandlerFunc(certificateController.Add))
+	for pattern, fnHandler := range fnHandlers {
+		router.AddRoute(pattern, HandlerFunc(fnHandler))
+	}
 
 	return router
 }

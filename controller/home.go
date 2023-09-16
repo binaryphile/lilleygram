@@ -20,9 +20,9 @@ func NewHomeController(middlewares ...Middleware) HomeController {
 		user := opt.Of(UserFromContext(request.Context))
 
 		ts, err := template.ParseFiles(
-			opt.OkOrNot(user, "gemtext/home.page.user.tmpl", "gemtext/home.page.tmpl"),
-			"gemtext/base.layout.tmpl",
-			"gemtext/footer.partial.tmpl",
+			opt.OkOrNot(user, "view/home.page.user.tmpl", "view/home.page.tmpl"),
+			"view/base.layout.tmpl",
+			"view/footer.partial.tmpl",
 		)
 		if err != nil {
 			log.Println(err.Error())

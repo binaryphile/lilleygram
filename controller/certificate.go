@@ -56,9 +56,9 @@ func NewCertificateController(repo sqlrepo.CertificateRepo, middlewares ...Middl
 			user, _ := UserFromContext(request.Context)
 
 			ts, err := template.ParseFiles(
-				"gemtext/certificate.index.tmpl",
-				"gemtext/base.layout.tmpl",
-				"gemtext/footer.partial.tmpl",
+				"view/certificate.index.tmpl",
+				"view/base.layout.tmpl",
+				"view/footer.partial.tmpl",
 			)
 			if err != nil {
 				log.Println(err)
