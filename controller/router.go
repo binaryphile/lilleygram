@@ -2,6 +2,7 @@ package controller
 
 import (
 	"github.com/a-h/gemini/mux"
+	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 )
 
 func Router(
@@ -11,15 +12,15 @@ func Router(
 ) *mux.Mux {
 	router := mux.NewMux()
 
-	router.AddRoute("/", homeController.handlers["get"])
+	router.AddRoute("/", HandlerFunc(homeController.Get))
 
-	router.AddRoute("/users", userController.handlers["list"])
+	router.AddRoute("/users", HandlerFunc(userController.List))
 
-	router.AddRoute("/users/{userID}", userController.handlers["get"])
+	router.AddRoute("/users/{userID}", HandlerFunc(userController.Get))
 
-	router.AddRoute("/users/{userID}/certificates", certificateController.handlers["list"])
+	router.AddRoute("/users/{userID}/certificates", HandlerFunc(certificateController.List))
 
-	router.AddRoute("/users/{userID}/certificates/add", certificateController.handlers["add"])
+	router.AddRoute("/users/{userID}/certificates/add", HandlerFunc(certificateController.Add))
 
 	return router
 }

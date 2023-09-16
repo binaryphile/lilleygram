@@ -11,7 +11,7 @@ import (
 	. "github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
-	. "github.com/binaryphile/lilleygram/sql"
+	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
 
 	_ "modernc.org/sqlite"
@@ -27,26 +27,17 @@ func main() {
 
 	certAuthorizer := newCertAuthorizer(db)
 
-	userRepo := NewUserRepo(db)
+	userRepo := sqlrepo.NewUserRepo(db)
 
 	withAuthentication := WithAuthentication(userRepo, certAuthorizer)
 
-	userController := controller.NewUserController(
-		userRepo, nil,
-		withAuthentication,
-	)
+	userController := controller.NewUserController(userRepo, withAuthentication)
 
-	certificateRepo := NewCertificateRepo(db)
+	certificateRepo := sqlrepo.NewCertificateRepo(db)
 
-	certificateController := controller.NewCertificateController(
-		certificateRepo, nil,
-		withAuthentication,
-	)
+	certificateController := controller.NewCertificateController(certificateRepo, withAuthentication)
 
-	homeController := controller.NewHomeController(
-		nil,
-		WithOptionalAuthentication(userRepo),
-	)
+	homeController := controller.NewHomeController(WithOptionalAuthentication(userRepo))
 
 	// set up the domain handler
 

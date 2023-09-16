@@ -7,7 +7,7 @@ import (
 	"github.com/a-h/gemini"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	. "github.com/binaryphile/lilleygram/shortcuts"
-	"github.com/binaryphile/lilleygram/sql"
+	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
 )
 
@@ -18,12 +18,14 @@ const (
 type (
 	FnAuthorize = func(certID, certKey string) bool
 
-	Middleware = func(Handler) Handler
+	FnHandler = func(ResponseWriter, *Request)
+
+	Middleware = func(FnHandler) FnHandler
 
 	contextKey string
 )
 
-func ExtendHandler(handler Handler, extensions ...Middleware) Handler {
+func ExtendFnHandler(handler FnHandler, extensions ...Middleware) FnHandler {
 	extended := handler
 
 	for _, extend := range extensions {
@@ -47,19 +49,19 @@ func UserFromContext(ctx Context) (_ struct {
 	return user, ok
 }
 
-func WithAuthentication(repo sql.UserRepo, authorizer FnAuthorize) Middleware {
-	return func(handler Handler) Handler {
-		return HandlerFunc(func(writer ResponseWriter, request *Request) {
-			contextHandler := WithOptionalAuthentication(repo)(handler)
+func WithAuthentication(repo sqlrepo.UserRepo, authorizer FnAuthorize) Middleware {
+	return func(handler FnHandler) FnHandler {
+		return func(writer ResponseWriter, request *Request) {
+			contextHandler := HandlerFunc(WithOptionalAuthentication(repo)(handler))
 
 			gemini.RequireCertificateHandler(contextHandler, authorizer).ServeGemini(writer, request)
-		})
+		}
 	}
 }
 
-func WithOptionalAuthentication(repo sql.UserRepo) Middleware {
-	return func(handler Handler) Handler {
-		return HandlerFunc(func(w ResponseWriter, request *Request) {
+func WithOptionalAuthentication(repo sqlrepo.UserRepo) Middleware {
+	return func(handler FnHandler) FnHandler {
+		return func(w ResponseWriter, request *Request) {
 			certID := request.Certificate.ID
 
 			if certID != "" {
@@ -85,7 +87,7 @@ func WithOptionalAuthentication(repo sql.UserRepo) Middleware {
 				}
 			}
 
-			handler.ServeGemini(w, request)
-		})
+			handler(w, request)
+		}
 	}
 }
