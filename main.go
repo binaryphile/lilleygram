@@ -5,14 +5,19 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"github.com/MakeNowJust/heredoc/v2"
 	"github.com/a-h/gemini"
+	"github.com/a-h/gemini/mux"
 	"github.com/binaryphile/lilleygram/controller"
 	. "github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
+	"github.com/binaryphile/lilleygram/opt"
+	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -26,35 +31,52 @@ func main() {
 
 	// create controllers
 
-	certAuthorizer := certAuthorizerWith(db)
-
 	userRepo := sqlrepo.NewUserRepo(db, unixNow)
 
-	withAuthentication := WithAuthentication(userRepo, certAuthorizer)
+	userController := controller.NewUserController(userRepo)
 
-	userController := controller.NewUserController(userRepo, withAuthentication)
+	userRouter := ExtendRouter(userController.Router(), WithAuthentication(userRepo, certAuthorizerWith(db)))
 
-	certificateRepo := sqlrepo.NewCertificateRepo(db)
+	homeController := controller.NewHomeController()
 
-	certificateController := controller.NewCertificateController(certificateRepo, withAuthentication)
-
-	homeController := controller.NewHomeController(WithOptionalAuthentication(userRepo))
+	homeRouter := ExtendRouter(homeController.Router(), WithOptionalAuthentication(userRepo))
 
 	// set up the domain handler
 
-	ctx := context.Background()
+	routes := map[string]gemini.Handler{
+		"/":      homeRouter,
+		"/users": userRouter,
+	}
+
+	router := mux.NewMux()
+
+	for pattern, handler := range routes {
+		router.AddRoute(pattern, handler)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("LGRAM_X509_CERT_FILE"), osmust.Getenv("LGRAM_X509_KEY_FILE"))
 
-	router := controller.Router(certificateController, homeController, userController)
-
 	domainHandler := gemini.NewDomainHandler(osmust.Getenv("LGRAM_SERVER_NAME"), certificate, router)
 
+	// handle shutdown signals
+
+	go cancelOnSignal(cancel, os.Interrupt, syscall.SIGTERM)
+
 	// Start the server
-	err := gemini.ListenAndServe(ctx, ":1965", domainHandler)
+	err := gemini.ListenAndServe(ctx, opt.Getenv("LGRAM_SERVER_ADDRESS").Or(":1965"), domainHandler)
 	if err != nil {
-		log.Fatal("error:", err)
+		log.Fatal(err)
 	}
+}
+
+func cancelOnSignal(cancel context.CancelFunc, signals ...os.Signal) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, signals...)
+	<-c
+	cancel()
 }
 
 func certAuthorizerWith(db *sql.DB) func(_, _ string) bool {
@@ -65,13 +87,13 @@ func certAuthorizerWith(db *sql.DB) func(_, _ string) bool {
 
 		var count int
 
-		err := db.QueryRow(heredoc.Doc(`
+		err := db.QueryRow(Heredoc(`
 				SELECT count(*) FROM users
 				INNER JOIN certificates ON users.user_id = certificates.user_id
 				WHERE cert_sha256 = $1
 			`), certSHA256).Scan(&count)
 		if err != nil {
-			log.Panicf("couldn't query users: %s", err)
+			log.Panic(err)
 		}
 
 		return count > 0

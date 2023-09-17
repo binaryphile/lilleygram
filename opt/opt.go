@@ -1,8 +1,40 @@
 package opt
 
-type Value[T any] struct {
-	ok bool
-	v  T
+import "os"
+
+type (
+	Value[T any] struct {
+		ok bool
+		v  T
+	}
+
+	Int64 = Value[int64]
+
+	String = Value[string]
+)
+
+func (v Value[T]) Or(other T) T {
+	if v.ok {
+		return v.v
+	}
+
+	return other
+}
+
+func (v Value[T]) OrZero() (_ T) {
+	if v.ok {
+		return v.v
+	}
+
+	return
+}
+
+func (v Value[T]) IsOk() bool {
+	return v.ok
+}
+
+func Getenv(key string) Value[string] {
+	return OfNonZero(os.Getenv(key))
 }
 
 func Map[T, R any](f func(T) R) func(Value[T]) Value[R] {
@@ -53,24 +85,4 @@ func OkOrNot[T, R any](value Value[T], ifOk, ifNot R) R {
 	}
 
 	return ifNot
-}
-
-func (x Value[T]) Or(other T) T {
-	if x.ok {
-		return x.v
-	}
-
-	return other
-}
-
-func (x Value[T]) OrZero() (_ T) {
-	if x.ok {
-		return x.v
-	}
-
-	return
-}
-
-func (x Value[T]) IsOk() bool {
-	return x.ok
 }

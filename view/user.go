@@ -1,4 +1,4 @@
-package model
+package view
 
 type User struct {
 	Avatar    string

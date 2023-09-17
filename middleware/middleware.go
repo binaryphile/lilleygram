@@ -35,6 +35,10 @@ func ExtendFnHandler(handler FnHandler, extensions ...Middleware) FnHandler {
 	return extended
 }
 
+func ExtendRouter(handler Handler, extensions ...Middleware) HandlerFunc {
+	return ExtendFnHandler(handler.ServeGemini, extensions...)
+}
+
 func UserFromContext(ctx Context) (_ struct {
 	Avatar   string
 	ID       uint64
@@ -52,7 +56,7 @@ func UserFromContext(ctx Context) (_ struct {
 func WithAuthentication(repo sqlrepo.UserRepo, authorizer FnAuthorize) Middleware {
 	return func(handler FnHandler) FnHandler {
 		return func(writer ResponseWriter, request *Request) {
-			contextHandler := HandlerFunc(WithOptionalAuthentication(repo)(handler))
+			contextHandler := HandlerFunc(ExtendFnHandler(handler, WithOptionalAuthentication(repo)))
 
 			gemini.RequireCertificateHandler(contextHandler, authorizer).ServeGemini(writer, request)
 		}

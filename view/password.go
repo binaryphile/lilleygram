@@ -1,4 +1,4 @@
-package model
+package view
 
 type Password struct {
 	Argon2    string
