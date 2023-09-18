@@ -144,11 +144,10 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 
 		_ = request.URL.RawQuery
 
-		p := view.Password{}
-
-		p.Salt = "salt"
-
-		p.Argon2 = "argon2"
+		p := view.Password{
+			Argon2: "argon2",
+			Salt:   "salt",
+		}
 
 		err := repo.PasswordAdd(user.ID, p)
 		if err != nil {
@@ -262,6 +261,7 @@ func (c UserController) Router() *mux.Mux {
 	router := mux.NewMux()
 
 	routes := map[string]Handler{
+		"/users":                           c.List,
 		"/users/{userID}":                  c.Get,
 		"/users/{userID}/certificates":     c.CertificateList,
 		"/users/{userID}/certificates/add": c.CertificateAdd,

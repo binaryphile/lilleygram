@@ -6,8 +6,8 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"github.com/a-h/gemini"
-	"github.com/a-h/gemini/mux"
 	"github.com/binaryphile/lilleygram/controller"
+	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	. "github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
@@ -23,7 +23,6 @@ import (
 
 func main() {
 	// open the database
-
 	db, closeDB := openSQL()
 	defer closeDB()
 
@@ -41,29 +40,45 @@ func main() {
 
 	// set up the domain handler
 
-	routes := map[string]gemini.Handler{
+	root := mountRouters(map[string]Handler{
 		"/":      homeRouter,
 		"/users": userRouter,
-	}
-
-	router := mux.NewMux()
-
-	for pattern, handler := range routes {
-		router.AddRoute(pattern, handler)
-	}
+	})
 
 	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("LGRAM_X509_CERT_FILE"), osmust.Getenv("LGRAM_X509_KEY_FILE"))
 
 	address := opt.Getenv("LGRAM_SERVER_ADDRESS").Or("g.lilleygram.com:1965")
 
-	host := strings.Split(address, ":")[0]
+	host, _, _ := strings.Cut(address, ":")
 
-	domainHandler := gemini.NewDomainHandler(host, certificate, router)
+	domainHandler := gemini.NewDomainHandler(host, certificate, root)
 
 	// Start the server
 	err := gemini.ListenAndServe(context.Background(), address, domainHandler)
 	if err != nil {
 		log.Panic(err)
+	}
+}
+
+func mountRouters(handlers map[string]Handler) HandlerFunc {
+	routes := make(map[string]Handler)
+
+	for pattern, handler := range handlers {
+		pattern = strings.TrimPrefix(pattern, "/")
+
+		routes[pattern] = handler
+	}
+
+	return func(writer ResponseWriter, request *Request) {
+		path := strings.TrimPrefix(request.URL.Path, "/")
+
+		first, _, _ := strings.Cut(path, "/")
+
+		if handler, ok := routes[first]; ok {
+			handler.ServeGemini(writer, request)
+		} else {
+			gemini.NotFound(writer, request)
+		}
 	}
 }
 

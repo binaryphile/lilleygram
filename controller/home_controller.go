@@ -16,7 +16,7 @@ type (
 
 func NewHomeController(middlewares ...map[string][]Middleware) HomeController {
 	authTmpls, err := template.ParseFiles(
-		"view/home.page.tmpl",
+		"view/home.page.user.tmpl",
 		"view/base.layout.tmpl",
 		"view/footer.partial.tmpl",
 	)
@@ -25,7 +25,7 @@ func NewHomeController(middlewares ...map[string][]Middleware) HomeController {
 	}
 
 	unauthTmpls, err := template.ParseFiles(
-		"view/home.page.user.tmpl",
+		"view/home.page.tmpl",
 		"view/base.layout.tmpl",
 		"view/footer.partial.tmpl",
 	)

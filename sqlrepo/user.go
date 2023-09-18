@@ -24,13 +24,13 @@ func NewUserRepo(db *sql.DB, now fnTime) UserRepo {
 	}
 }
 
-func (r UserRepo) CertificateAdd(sha256 string, expiry int64, userID uint64) (_ string, err error) {
+func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) (_ string, err error) {
 	stmt := Heredoc(`
 		INSERT INTO certificates (cert_sha256, expire_at, user_id)
 		VALUES ($1, $2, $3)
 	`)
 
-	_, err = r.db.Exec(stmt, sha256, expiry, userID)
+	_, err = r.db.Exec(stmt, sha256, expireAt, userID)
 	if err != nil {
 		return
 	}
