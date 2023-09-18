@@ -13,12 +13,12 @@ type (
 	String = Value[string]
 )
 
-func (v Value[T]) Or(other T) T {
+func (v Value[T]) Or(ifNot T) T {
 	if v.ok {
 		return v.v
 	}
 
-	return other
+	return ifNot
 }
 
 func (v Value[T]) OrZero() (_ T) {

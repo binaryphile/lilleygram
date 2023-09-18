@@ -15,9 +15,7 @@ import (
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -35,7 +33,7 @@ func main() {
 
 	userController := controller.NewUserController(userRepo)
 
-	userRouter := ExtendRouter(userController.Router(), WithAuthentication(userRepo, certAuthorizerWith(db)))
+	userRouter := ExtendRouter(userController.Router(), WithAuthentication(userRepo, newCertAuthorizer(db)))
 
 	homeController := controller.NewHomeController()
 
@@ -54,32 +52,22 @@ func main() {
 		router.AddRoute(pattern, handler)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("LGRAM_X509_CERT_FILE"), osmust.Getenv("LGRAM_X509_KEY_FILE"))
 
-	domainHandler := gemini.NewDomainHandler(osmust.Getenv("LGRAM_SERVER_NAME"), certificate, router)
+	address := opt.Getenv("LGRAM_SERVER_ADDRESS").Or("g.lilleygram.com:1965")
 
-	// handle shutdown signals
+	host := strings.Split(address, ":")[0]
 
-	go cancelOnSignal(cancel, os.Interrupt, syscall.SIGTERM)
+	domainHandler := gemini.NewDomainHandler(host, certificate, router)
 
 	// Start the server
-	err := gemini.ListenAndServe(ctx, opt.Getenv("LGRAM_SERVER_ADDRESS").Or(":1965"), domainHandler)
+	err := gemini.ListenAndServe(context.Background(), address, domainHandler)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 }
 
-func cancelOnSignal(cancel context.CancelFunc, signals ...os.Signal) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, signals...)
-	<-c
-	cancel()
-}
-
-func certAuthorizerWith(db *sql.DB) func(_, _ string) bool {
+func newCertAuthorizer(db *sql.DB) func(_, _ string) bool {
 	return func(certID, _ string) bool {
 		hash := sha256.Sum256([]byte(certID))
 
