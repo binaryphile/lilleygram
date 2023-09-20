@@ -1,23 +1,24 @@
 package sqlrepo
 
 import (
-	"database/sql"
 	"errors"
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/view"
-	"log"
+	. "github.com/doug-martin/goqu/v9"
+
+	_ "github.com/doug-martin/goqu/v9/dialect/sqlite3"
 )
 
 type (
 	UserRepo struct {
-		db  *sql.DB
+		db  *Database
 		now func() int64
 	}
 
 	fnTime = func() int64
 )
 
-func NewUserRepo(db *sql.DB, now fnTime) UserRepo {
+func NewUserRepo(db *Database, now fnTime) UserRepo {
 	return UserRepo{
 		db:  db,
 		now: now,
@@ -25,13 +26,11 @@ func NewUserRepo(db *sql.DB, now fnTime) UserRepo {
 }
 
 func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) (_ string, err error) {
-	stmt := Heredoc(`
-		INSERT INTO certificates (cert_sha256, expire_at, user_id)
-		VALUES ($1, $2, $3)
-	`)
+	insert := r.db.From("certificates").Insert().Rows(
+		Record{"cert_sha256": sha256, "expire_at": expireAt, "user_id": userID},
+	).Executor()
 
-	_, err = r.db.Exec(stmt, sha256, expireAt, userID)
-	if err != nil {
+	if _, err = insert.Exec(); err != nil {
 		return
 	}
 
@@ -39,39 +38,10 @@ func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) (
 }
 
 func (r UserRepo) CertificateListByUser(userID uint64) (_ []view.Certificate, err error) {
-	stmt := Heredoc(`
-		SELECT cert_sha256, expire_at, created_at, updated_at
-		FROM certificates
-		WHERE user_id = $1
-	`)
+	certificates := make([]view.Certificate, 0)
 
-	rows, err := r.db.Query(stmt, userID)
-	if err != nil {
-		return
-	}
-
-	defer func() {
-		err := rows.Close()
-		if err != nil {
-			log.Println(err)
-		}
-	}()
-
-	var certificates []view.Certificate
-
-	for rows.Next() {
-		var c view.Certificate
-
-		var expireAt int64
-
-		err = rows.Scan(&c.SHA256, &expireAt, &c.CreatedAt, &c.UpdatedAt)
-		if err != nil {
-			return
-		}
-
-		c.ExpireAt = expireAt
-
-		certificates = append(certificates, c)
+	if err = r.db.From("certificates").Where(Ex{"user_id": userID}).ScanStructs(&certificates); err != nil {
+		panic(err)
 	}
 
 	return certificates, nil
@@ -141,14 +111,38 @@ func (r UserRepo) GetByCertificate(certSHA256 string) (_ view.User, err error) {
 }
 
 func (r UserRepo) PasswordAdd(userID uint64, password view.Password) error {
-	stmt := Heredoc(`
-		INSERT INTO passwords (user_id, argon2, salt) 
-		VALUES ($1, $2, $3)
-	`)
+	var count int
 
-	_, err := r.db.Exec(stmt, userID, password.Argon2, password.Salt)
+	_, err := r.db.From("passwords").
+		Select(COUNT("*")).
+		Where(Ex{"user_id": userID}).
+		ScanVal(&count)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if count == 0 {
+		insert := r.db.Insert("passwords").
+			Rows(
+				Record{"user_id": userID, "argon2": password.Argon2, "salt": password.Salt},
+			).Executor()
+
+		if _, err = insert.Exec(); err != nil {
+			return err
+		}
+	} else {
+		update := r.db.Update("passwords").
+			Where(Ex{"user_id": userID}).
+			Set(
+				Record{"argon2": password.Argon2, "salt": password.Salt, "updated_at": r.now()},
+			).Executor()
+
+		if _, err = update.Exec(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r UserRepo) PasswordGet(userID uint64) (_ view.Password, err error) {

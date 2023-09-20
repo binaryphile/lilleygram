@@ -14,6 +14,7 @@ import (
 	"github.com/binaryphile/lilleygram/opt"
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
+	"github.com/doug-martin/goqu/v9"
 	"log"
 	"strings"
 	"time"
@@ -28,7 +29,7 @@ func main() {
 
 	// create controllers
 
-	userRepo := sqlrepo.NewUserRepo(db, unixNow)
+	userRepo := sqlrepo.NewUserRepo(goqu.New("sqlite3", db), unixNow)
 
 	userController := controller.NewUserController(userRepo)
 

@@ -133,7 +133,7 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 
 	passwordAdd := func(writer ResponseWriter, request *Request) {
 		if request.URL.RawQuery == "" {
-			err := writer.SetHeader(gemini.CodeInput, "New Password:")
+			err := writer.SetHeader(gemini.CodeInputSensitive, "New Password:")
 			if err != nil {
 				log.Println(err)
 			}

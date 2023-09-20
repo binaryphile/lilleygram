@@ -6,10 +6,10 @@ import (
 )
 
 type Certificate struct {
-	CreatedAt int64
-	ExpireAt  int64
-	SHA256    string
-	UpdatedAt int64
+	CreatedAt int64  `db:"created_at"`
+	ExpireAt  int64  `db:"expire_at"`
+	SHA256    string `db:"cert_sha256"`
+	UpdatedAt int64  `db:"updated_at"`
 }
 
 func (c Certificate) GetCreatedAt() string {
