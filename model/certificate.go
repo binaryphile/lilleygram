@@ -1,4 +1,4 @@
-package view
+package model
 
 import (
 	"github.com/argoproj/pkg/humanize"

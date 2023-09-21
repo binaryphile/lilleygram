@@ -12,9 +12,8 @@ import (
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
 	"github.com/binaryphile/lilleygram/opt"
-	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
-	"github.com/doug-martin/goqu/v9"
+	. "github.com/doug-martin/goqu/v9"
 	"log"
 	"strings"
 	"time"
@@ -24,12 +23,14 @@ import (
 
 func main() {
 	// open the database
-	db, closeDB := openSQL()
+	sqlDB, closeDB := openSQL()
 	defer closeDB()
+
+	db := New("sqlite3", sqlDB)
 
 	// create controllers
 
-	userRepo := sqlrepo.NewUserRepo(goqu.New("sqlite3", db), unixNow)
+	userRepo := sqlrepo.NewUserRepo(db, unixNow)
 
 	userController := controller.NewUserController(userRepo)
 
@@ -83,7 +84,7 @@ func mountRouters(handlers map[string]Handler) HandlerFunc {
 	}
 }
 
-func newCertAuthorizer(db *sql.DB) func(_, _ string) bool {
+func newCertAuthorizer(db *Database) func(_, _ string) bool {
 	return func(certID, _ string) bool {
 		hash := sha256.Sum256([]byte(certID))
 
@@ -91,13 +92,17 @@ func newCertAuthorizer(db *sql.DB) func(_, _ string) bool {
 
 		var count int
 
-		err := db.QueryRow(Heredoc(`
-				SELECT count(*) FROM users
-				INNER JOIN certificates ON users.user_id = certificates.user_id
-				WHERE cert_sha256 = $1
-			`), certSHA256).Scan(&count)
+		_, err := db.From("users").
+			Select(
+				COUNT("*"),
+			).
+			Join(T("certificates"), On(
+				Ex{"users.user_id": I("certificates.user_id")},
+			)).
+			Where(Ex{"cert_sha256": certSHA256}).
+			ScanVal(&count)
 		if err != nil {
-			log.Panic(err)
+			return false
 		}
 
 		return count > 0

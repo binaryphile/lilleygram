@@ -73,8 +73,8 @@ func WithOptionalAuthentication(repo sqlrepo.UserRepo) Middleware {
 
 				certSHA256 := hex.EncodeToString(hash[:])
 
-				u, err := repo.GetByCertificate(certSHA256)
-				if err != nil {
+				u, found, err := repo.GetByCertificate(certSHA256)
+				if err != nil || !found {
 					log.Panic(err)
 				}
 

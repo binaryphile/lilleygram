@@ -7,8 +7,8 @@ import (
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	. "github.com/binaryphile/lilleygram/middleware"
+	"github.com/binaryphile/lilleygram/model"
 	"github.com/binaryphile/lilleygram/sqlrepo"
-	"github.com/binaryphile/lilleygram/view"
 	"log"
 	"text/template"
 )
@@ -19,7 +19,7 @@ type (
 		CertificateList Handler
 		Get             Handler
 		List            Handler
-		PasswordAdd     Handler
+		PasswordSet     Handler
 		PasswordGet     Handler
 	}
 )
@@ -83,7 +83,7 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 			}
 
 			data := struct {
-				Certificates []view.Certificate
+				Certificates []model.Certificate
 				User         User
 			}{
 				Certificates: certificates,
@@ -103,8 +103,8 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 			return
 		}
 
-		u, err := repo.Get(user.ID)
-		if err != nil {
+		u, found, err := repo.Get(user.ID)
+		if err != nil || !found {
 			log.Panic(err)
 		}
 
@@ -120,38 +120,14 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 			return
 		}
 
-		u, err := repo.Get(user.ID)
-		if err != nil {
+		u, found, err := repo.Get(user.ID)
+		if err != nil || found {
 			log.Panic(err)
 		}
 
 		_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", u.ID, u.FirstName, u.LastName, u.UserName)))
 		if err != nil {
 			log.Panic(err)
-		}
-	}
-
-	passwordAdd := func(writer ResponseWriter, request *Request) {
-		if request.URL.RawQuery == "" {
-			err := writer.SetHeader(gemini.CodeInputSensitive, "New Password:")
-			if err != nil {
-				log.Println(err)
-			}
-			return
-		}
-
-		user, _ := UserFromContext(request.Context)
-
-		_ = request.URL.RawQuery
-
-		p := view.Password{
-			Argon2: "argon2",
-			Salt:   "salt",
-		}
-
-		err := repo.PasswordAdd(user.ID, p)
-		if err != nil {
-			log.Println(err)
 		}
 	}
 
@@ -170,7 +146,7 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 		passwordGet = func(writer ResponseWriter, request *Request) {
 			user, _ := UserFromContext(request.Context)
 
-			password, err := repo.PasswordGet(user.ID)
+			password, _, err := repo.PasswordGet(user.ID)
 			if err != nil {
 				return
 			}
@@ -182,7 +158,7 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 			}
 
 			data := struct {
-				Password view.Password
+				Password model.Password
 				User     User
 			}{
 				Password: password,
@@ -196,13 +172,39 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 		}
 	}
 
+	passwordSet := func(writer ResponseWriter, request *Request) {
+		if request.URL.RawQuery == "" {
+			err := writer.SetHeader(gemini.CodeInputSensitive, "New Password:")
+			if err != nil {
+				log.Println(err)
+			}
+			return
+		}
+
+		user, _ := UserFromContext(request.Context)
+
+		password := request.URL.RawQuery
+
+		p := model.NewPassword(password)
+
+		err := repo.PasswordSet(user.ID, p)
+		if err != nil {
+			log.Println(err)
+		}
+
+		err = writer.SetHeader(gemini.CodeRedirect, ".")
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
 	handlerNames := []string{
 		"certificateAdd",
 		"certificateList",
 		"get",
 		"list",
-		"passwordAdd",
 		"passwordGet",
+		"passwordSet",
 	}
 
 	// this would be easier if functions were comparable
@@ -235,7 +237,7 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 		case "passwordAdd":
 			for _, middleware := range middlewares {
 				if extensions, ok := middleware[name]; ok {
-					passwordAdd = ExtendFnHandler(passwordAdd, extensions...)
+					passwordSet = ExtendFnHandler(passwordSet, extensions...)
 				}
 			}
 		case "passwordGet":
@@ -252,8 +254,8 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 		CertificateList: HandlerFunc(certificateList),
 		Get:             HandlerFunc(get),
 		List:            HandlerFunc(list),
-		PasswordAdd:     HandlerFunc(passwordAdd),
 		PasswordGet:     HandlerFunc(passwordGet),
+		PasswordSet:     HandlerFunc(passwordSet),
 	}
 }
 
@@ -266,7 +268,7 @@ func (c UserController) Router() *mux.Mux {
 		"/users/{userID}/certificates":     c.CertificateList,
 		"/users/{userID}/certificates/add": c.CertificateAdd,
 		"/users/{userID}/password":         c.PasswordGet,
-		"/users/{userID}/password/add":     c.PasswordAdd,
+		"/users/{userID}/password/set":     c.PasswordSet,
 	}
 
 	for pattern, handler := range routes {

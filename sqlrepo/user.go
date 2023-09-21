@@ -1,9 +1,8 @@
 package sqlrepo
 
 import (
-	"errors"
-	. "github.com/binaryphile/lilleygram/shortcuts"
-	"github.com/binaryphile/lilleygram/view"
+	"database/sql"
+	"github.com/binaryphile/lilleygram/model"
 	. "github.com/doug-martin/goqu/v9"
 
 	_ "github.com/doug-martin/goqu/v9/dialect/sqlite3"
@@ -26,35 +25,43 @@ func NewUserRepo(db *Database, now fnTime) UserRepo {
 }
 
 func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) (_ string, err error) {
-	insert := r.db.From("certificates").Insert().Rows(
-		Record{"cert_sha256": sha256, "expire_at": expireAt, "user_id": userID},
-	).Executor()
+	query := r.db.
+		Insert("certificates").
+		Rows(
+			Record{"cert_sha256": sha256, "expire_at": expireAt, "user_id": userID},
+		)
 
-	if _, err = insert.Exec(); err != nil {
+	if _, err = query.Executor().Exec(); err != nil {
 		return
 	}
 
 	return sha256, nil
 }
 
-func (r UserRepo) CertificateListByUser(userID uint64) (_ []view.Certificate, err error) {
-	certificates := make([]view.Certificate, 0)
+func (r UserRepo) CertificateListByUser(userID uint64) (_ []model.Certificate, err error) {
+	certificates := make([]model.Certificate, 0)
 
-	if err = r.db.From("certificates").Where(Ex{"user_id": userID}).ScanStructs(&certificates); err != nil {
+	err = r.db.
+		From("certificates").
+		Where(Ex{"user_id": userID}).
+		ScanStructs(&certificates)
+	if err != nil {
 		panic(err)
 	}
 
 	return certificates, nil
 }
 
-func (r UserRepo) Add(firstName, lastName, userName, avatar string) (zero uint64, err error) {
-	stmt := Heredoc(`
-		INSERT INTO users (avatar, first_name, last_name, user_name)
-		VALUES ($1, $2, $3, $4)
-	`)
+func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, err error) {
+	insert := r.db.
+		Insert("users").
+		Rows(
+			Record{"avatar": avatar, "first_name": firstName, "last_name": lastName, "user_name": userName},
+		).Executor()
 
-	result, err := r.db.Exec(stmt, avatar, firstName, lastName, userName)
-	if err != nil {
+	var result sql.Result
+
+	if result, err = insert.Exec(); err != nil {
 		return
 	}
 
@@ -63,55 +70,70 @@ func (r UserRepo) Add(firstName, lastName, userName, avatar string) (zero uint64
 		return
 	}
 
-	rowCount, err := result.RowsAffected()
-	if err != nil {
-		return
-	}
-
-	if rowCount != 1 {
-		return zero, errors.New("unexpected row count on query result")
-	}
-
 	return uint64(userID), nil
 }
 
-func (r UserRepo) Get(id uint64) (_ view.User, err error) {
-	stmt := Heredoc(`
-		SELECT users.user_id, avatar, first_name, last_name, user_name FROM users
-		INNER JOIN certificates ON users.user_id = certificates.user_id
-		WHERE users.user_id = $1
-	`)
+func (r UserRepo) Get(id uint64) (_ model.User, found bool, err error) {
+	var u model.User
 
-	var u view.User
+	found, err = r.db.
+		From("users").
+		Join(
+			T("certificates"),
+			On(Ex{"users.user_id": I("certificates.user_id")}),
+		).
+		Where(Ex{"users.user_id": id}).
+		ScanStruct(&u)
+	if err != nil || !found {
+		return
+	}
 
-	err = r.db.QueryRow(stmt, id).Scan(&u.ID, &u.Avatar, &u.FirstName, &u.LastName, &u.UserName)
+	return u, true, nil
+}
+
+func (r UserRepo) GetByCertificate(certSHA256 string) (_ model.User, found bool, err error) {
+	var u model.User
+
+	query := r.db.
+		From("users").
+		Select(
+			I("users.user_id").As("user_id"), "avatar", "first_name", "last_name", "user_name",
+		).
+		Join(
+			T("certificates"), On(Ex{"users.user_id": I("certificates.user_id")}),
+		).
+		Where(
+			Ex{"cert_sha256": certSHA256},
+		)
+
+	found, err = query.ScanStruct(&u)
+	if err != nil || !found {
+		return
+	}
+
+	return u, true, nil
+}
+
+func (r UserRepo) PasswordGet(userID uint64) (_ model.Password, found bool, err error) {
+	var p model.Password
+
+	found, err = r.db.From("passwords").Where(Ex{"user_id": userID}).ScanStruct(&p)
 	if err != nil {
 		return
 	}
 
-	return u, nil
-}
-
-func (r UserRepo) GetByCertificate(certSHA256 string) (_ view.User, err error) {
-	stmt := Heredoc(`
-		SELECT users.user_id, first_name, last_name, user_name, avatar FROM users
-		INNER JOIN certificates ON users.user_id = certificates.user_id
-		WHERE cert_sha256 = $1
-	`)
-
-	var u view.User
-
-	err = r.db.QueryRow(stmt, certSHA256).
-		Scan(&u.ID, &u.FirstName, &u.LastName, &u.UserName, &u.Avatar)
-	if err != nil {
+	if !found {
 		return
 	}
 
-	return u, nil
+	p.UserID = userID
+
+	return p, true, nil
 }
 
-func (r UserRepo) PasswordAdd(userID uint64, password view.Password) error {
-	update := r.db.Update("passwords").
+func (r UserRepo) PasswordSet(userID uint64, password model.Password) error {
+	update := r.db.
+		Update("passwords").
 		Where(Ex{"user_id": userID}).
 		Set(
 			Record{"argon2": password.Argon2, "salt": password.Salt, "updated_at": r.now()},
@@ -139,33 +161,4 @@ func (r UserRepo) PasswordAdd(userID uint64, password view.Password) error {
 	}
 
 	return nil
-}
-
-func (r UserRepo) PasswordGet(userID uint64) (_ view.Password, err error) {
-	stmt := Heredoc(`
-		SELECT argon2, salt, created_at, updated_at
-		FROM passwords
-		WHERE user_id = $1
-	`)
-
-	var p view.Password
-
-	err = r.db.QueryRow(stmt, userID).Scan(&p.Argon2, &p.CreatedAt, &p.Salt)
-	if err != nil {
-		return
-	}
-
-	return p, nil
-}
-
-func (r UserRepo) PasswordUpdate(userID uint64, password view.Password) error {
-	stmt := Heredoc(`
-		UPDATE passwords
-		SET argon2 = $1, salt = $2, updated_at = $3
-		WHERE user_id = $4
-	`)
-
-	_, err := r.db.Exec(stmt, password.Argon2, password.Salt, r.now(), userID)
-
-	return err
 }
