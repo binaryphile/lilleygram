@@ -111,33 +111,29 @@ func (r UserRepo) GetByCertificate(certSHA256 string) (_ view.User, err error) {
 }
 
 func (r UserRepo) PasswordAdd(userID uint64, password view.Password) error {
-	var count int
-
-	_, err := r.db.From("passwords").
-		Select(COUNT("*")).
+	update := r.db.Update("passwords").
 		Where(Ex{"user_id": userID}).
-		ScanVal(&count)
+		Set(
+			Record{"argon2": password.Argon2, "salt": password.Salt, "updated_at": r.now()},
+		).Executor()
+
+	res, err := update.Exec()
 	if err != nil {
 		return err
 	}
 
-	if count == 0 {
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
 		insert := r.db.Insert("passwords").
 			Rows(
 				Record{"user_id": userID, "argon2": password.Argon2, "salt": password.Salt},
 			).Executor()
 
 		if _, err = insert.Exec(); err != nil {
-			return err
-		}
-	} else {
-		update := r.db.Update("passwords").
-			Where(Ex{"user_id": userID}).
-			Set(
-				Record{"argon2": password.Argon2, "salt": password.Salt, "updated_at": r.now()},
-			).Executor()
-
-		if _, err = update.Exec(); err != nil {
 			return err
 		}
 	}
