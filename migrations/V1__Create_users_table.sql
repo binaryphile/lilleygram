@@ -1,6 +1,6 @@
 CREATE TABLE users
 (
-    user_id    INTEGER NOT NULL PRIMARY KEY,
+    id         INTEGER NOT NULL PRIMARY KEY,
     avatar     TEXT    NOT NULL,
     expire_at  INTEGER NOT NULL DEFAULT 0,
     first_name TEXT    NOT NULL,

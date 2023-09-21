@@ -2,12 +2,9 @@ package middleware
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"github.com/a-h/gemini"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	. "github.com/binaryphile/lilleygram/shortcuts"
-	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
 )
 
@@ -16,7 +13,11 @@ const (
 )
 
 type (
-	FnAuthorize = func(certID, certKey string) bool
+	FnAuthorize = func(certID, certKey string) (struct {
+		Avatar   string
+		ID       uint64
+		UserName string
+	}, bool)
 
 	FnHandler = func(ResponseWriter, *Request)
 
@@ -53,41 +54,47 @@ func UserFromContext(ctx Context) (_ struct {
 	return user, ok
 }
 
-func WithAuthentication(repo sqlrepo.UserRepo, authorizer FnAuthorize) Middleware {
+func WithAuthentication(authorizer FnAuthorize) Middleware {
 	return func(handler FnHandler) FnHandler {
 		return func(writer ResponseWriter, request *Request) {
-			contextHandler := HandlerFunc(ExtendFnHandler(handler, WithOptionalAuthentication(repo)))
+			certID := request.Certificate.ID
 
-			gemini.RequireCertificateHandler(contextHandler, authorizer).ServeGemini(writer, request)
+			if certID == "" {
+				err := writer.SetHeader(gemini.CodeClientCertificateRequired, "client certificate required")
+				if err != nil {
+					log.Panic(err)
+				}
+
+				return
+			}
+
+			user, found := authorizer(certID, request.Certificate.Key)
+			if !found {
+				err := writer.SetHeader(gemini.CodeClientCertificateNotAuthorised, "not authorised")
+				if err != nil {
+					log.Panic(err)
+				}
+
+				return
+			}
+
+			request.Context = context.WithValue(request.Context, keyUser, user)
+
+			HandlerFunc(handler).ServeGemini(writer, request)
 		}
 	}
 }
 
-func WithOptionalAuthentication(repo sqlrepo.UserRepo) Middleware {
+func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {
 	return func(handler FnHandler) FnHandler {
 		return func(w ResponseWriter, request *Request) {
 			certID := request.Certificate.ID
 
 			if certID != "" {
-				hash := sha256.Sum256([]byte(certID))
+				user, found := authorizer(certID, request.Certificate.Key)
 
-				certSHA256 := hex.EncodeToString(hash[:])
-
-				u, found, err := repo.GetByCertificate(certSHA256)
-				if err != nil || !found {
-					log.Panic(err)
-				}
-
-				if u.UserName != "" {
-					request.Context = context.WithValue(request.Context, keyUser, struct {
-						Avatar   string
-						ID       uint64
-						UserName string
-					}{
-						Avatar:   u.Avatar,
-						ID:       u.ID,
-						UserName: u.UserName,
-					})
+				if found {
+					request.Context = context.WithValue(request.Context, keyUser, user)
 				}
 			}
 

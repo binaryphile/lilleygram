@@ -121,7 +121,7 @@ func NewUserController(repo sqlrepo.UserRepo, middlewares ...map[string][]Middle
 		}
 
 		u, found, err := repo.Get(user.ID)
-		if err != nil || found {
+		if err != nil || !found {
 			log.Panic(err)
 		}
 

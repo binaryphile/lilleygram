@@ -13,7 +13,7 @@ import (
 	"github.com/binaryphile/lilleygram/must/tlsmust"
 	"github.com/binaryphile/lilleygram/opt"
 	"github.com/binaryphile/lilleygram/sqlrepo"
-	. "github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9"
 	"log"
 	"strings"
 	"time"
@@ -23,10 +23,10 @@ import (
 
 func main() {
 	// open the database
-	sqlDB, closeDB := openSQL()
+	sqlDB, closeDB := openSQL(osmust.Getenv("LGRAM_SQLITE_FILE"))
 	defer closeDB()
 
-	db := New("sqlite3", sqlDB)
+	db := goqu.New("sqlite3", sqlDB)
 
 	// create controllers
 
@@ -34,11 +34,13 @@ func main() {
 
 	userController := controller.NewUserController(userRepo)
 
-	userRouter := ExtendRouter(userController.Router(), WithAuthentication(userRepo, newCertAuthorizer(db)))
+	certAuthorizer := newCertAuthorizer(userRepo)
+
+	userRouter := ExtendRouter(userController.Router(), WithAuthentication(certAuthorizer))
 
 	homeController := controller.NewHomeController()
 
-	homeRouter := ExtendRouter(homeController.Router(), WithOptionalAuthentication(userRepo))
+	homeRouter := ExtendRouter(homeController.Router(), WithOptionalAuthentication(certAuthorizer))
 
 	// set up the domain handler
 
@@ -51,12 +53,14 @@ func main() {
 
 	address := opt.Getenv("LGRAM_SERVER_ADDRESS").Or("g.lilleygram.com:1965")
 
-	host, _, _ := strings.Cut(address, ":")
+	host, port, _ := strings.Cut(address, ":")
 
 	domainHandler := gemini.NewDomainHandler(host, certificate, root)
 
+	port = ":" + opt.OfNonZero(port).Or("1965")
+
 	// Start the server
-	err := gemini.ListenAndServe(context.Background(), address, domainHandler)
+	err := gemini.ListenAndServe(context.Background(), port, domainHandler)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -84,33 +88,36 @@ func mountRouters(handlers map[string]Handler) HandlerFunc {
 	}
 }
 
-func newCertAuthorizer(db *Database) func(_, _ string) bool {
-	return func(certID, _ string) bool {
+func newCertAuthorizer(repo sqlrepo.UserRepo) FnAuthorize {
+	return func(certID, _ string) (_ struct {
+		Avatar   string
+		ID       uint64
+		UserName string
+	}, ok bool) {
 		hash := sha256.Sum256([]byte(certID))
 
 		certSHA256 := hex.EncodeToString(hash[:])
 
-		var count int
-
-		_, err := db.From("users").
-			Select(
-				COUNT("*"),
-			).
-			Join(T("certificates"), On(
-				Ex{"users.user_id": I("certificates.user_id")},
-			)).
-			Where(Ex{"cert_sha256": certSHA256}).
-			ScanVal(&count)
-		if err != nil {
-			return false
+		user, found, err := repo.GetByCertificate(certSHA256)
+		if err != nil || !found {
+			log.Print(err)
+			return
 		}
 
-		return count > 0
+		return struct {
+			Avatar   string
+			ID       uint64
+			UserName string
+		}{
+			Avatar:   user.Avatar,
+			ID:       user.ID,
+			UserName: user.UserName,
+		}, true
 	}
 }
 
-func openSQL() (db *sql.DB, cleanup func()) {
-	db, err := sql.Open("sqlite", osmust.Getenv("LGRAM_SQLITE_FILE"))
+func openSQL(fileName string) (db *sql.DB, cleanup func()) {
+	db, err := sql.Open("sqlite", fileName)
 	if err != nil {
 		log.Fatalf("couldn't open sql db: %s", err)
 	}
