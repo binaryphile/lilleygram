@@ -32,30 +32,37 @@ func main() {
 
 	userRepo := sqlrepo.NewUserRepo(db, unixNow)
 
-	userController := controller.NewUserController(userRepo)
-
 	certAuthorizer := newCertAuthorizer(userRepo)
 
-	userRouter := ExtendRouter(userController.Router(), WithAuthentication(certAuthorizer))
+	userController := controller.NewUserController(userRepo)
+	userRouter := ExtendRouter(
+		userController.Router(),
+		WithAuthentication(certAuthorizer),
+	)
 
 	homeController := controller.NewHomeController()
-
-	homeRouter := ExtendRouter(homeController.Router(), WithOptionalAuthentication(certAuthorizer))
+	homeRouter := ExtendRouter(
+		homeController.Router(),
+		WithOptionalAuthentication(certAuthorizer),
+	)
 
 	// set up the domain handler
 
-	root := mountRouters(map[string]Handler{
+	rootHandler := mountRouters(map[string]Handler{
 		"/":      homeRouter,
 		"/users": userRouter,
 	})
 
-	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("LGRAM_X509_CERT_FILE"), osmust.Getenv("LGRAM_X509_KEY_FILE"))
+	certificate := tlsmust.LoadX509KeyPair(
+		opt.Getenv("LGRAM_X509_CERT_FILE").Or("server.crt"),
+		opt.Getenv("LGRAM_X509_KEY_FILE").Or("server.key"),
+	)
 
-	address := opt.Getenv("LGRAM_SERVER_ADDRESS").Or("g.lilleygram.com:1965")
+	address := opt.Getenv("LGRAM_SERVER_ADDRESS").Or("g.lilleygram.com")
 
 	host, port, _ := strings.Cut(address, ":")
 
-	domainHandler := gemini.NewDomainHandler(host, certificate, root)
+	domainHandler := gemini.NewDomainHandler(host, certificate, rootHandler)
 
 	port = ":" + opt.OfNonZero(port).Or("1965")
 
@@ -67,20 +74,12 @@ func main() {
 }
 
 func mountRouters(handlers map[string]Handler) HandlerFunc {
-	routes := make(map[string]Handler)
-
-	for pattern, handler := range handlers {
-		pattern = strings.TrimPrefix(pattern, "/")
-
-		routes[pattern] = handler
-	}
-
 	return func(writer ResponseWriter, request *Request) {
 		path := strings.TrimPrefix(request.URL.Path, "/")
 
 		first, _, _ := strings.Cut(path, "/")
 
-		if handler, ok := routes[first]; ok {
+		if handler, ok := handlers["/"+first]; ok {
 			handler.ServeGemini(writer, request)
 		} else {
 			gemini.NotFound(writer, request)
