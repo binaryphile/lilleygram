@@ -1,0 +1,16 @@
+{{template "base" .}}
+{{define "main"}}
+## {{.User.Avatar}} {{.User.UserName}}'s Certificates
+{{if .Certificates}}
+{{range $index, $element := .Certificates}}
+### Certificate {{$index}}
+
+Created At: {{.CreatedAt}}
+Expires: {{.Expiry}}
+SHA256: {{.CertSHA256}}
+{{end}}
+{{else}}
+There's nothing to see here yet!
+{{end}}
+=> gemini://localhost/users/1/certificates/add Add new certificate
+{{end}}

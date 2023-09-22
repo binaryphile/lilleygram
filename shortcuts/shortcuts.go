@@ -2,13 +2,12 @@ package shortcuts
 
 import (
 	"context"
+	"github.com/MakeNowJust/heredoc/v2"
 	"net/url"
-
- "github.com/makenowjust/heredoc/v2"
 )
 
 var (
- Heredoc = heredoc.Doc
+	Heredoc = heredoc.Doc
 )
 
 type (
