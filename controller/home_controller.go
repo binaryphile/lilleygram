@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"errors"
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/helper"
 	. "github.com/binaryphile/lilleygram/middleware"
 	"log"
 	"text/template"
@@ -10,74 +12,76 @@ import (
 
 type (
 	HomeController struct {
-		Get Handler
+		handler   *Mux
+		templates map[string]*Template
 	}
 )
 
-func NewHomeController(middlewares ...map[string][]Middleware) HomeController {
-	authTmpls, err := template.ParseFiles(
-		"view/home.page.user.tmpl",
-		"view/base.layout.tmpl",
-		"view/footer.partial.tmpl",
-	)
-	if err != nil {
-		log.Panic(err)
+func NewHomeController() HomeController {
+	c := HomeController{
+		templates: make(map[string]*Template),
 	}
 
-	unauthTmpls, err := template.ParseFiles(
-		"view/home.page.tmpl",
-		"view/base.layout.tmpl",
-		"view/footer.partial.tmpl",
-	)
-	if err != nil {
-		log.Panic(err)
+	baseTemplates := []string{
+		"view/partial/nav.tmpl",
+		"view/layout/base.tmpl",
+		"view/partial/footer.tmpl",
 	}
 
-	get := func(writer ResponseWriter, request *Request) {
-		if user, ok := UserFromContext(request.Context); ok {
-			err = authTmpls.Execute(writer, user)
-			if err != nil {
-				log.Panicf("couldn't execute template: %s", err)
-			}
-			return
-		}
+	{
+		templates := append([]string{"view/home.get.tmpl"}, baseTemplates...)
 
-		err = unauthTmpls.Execute(writer, nil)
+		tmpl, err := template.ParseFiles(templates...)
 		if err != nil {
 			log.Panic(err)
 		}
+
+		c.templates["get"] = tmpl
 	}
 
-	methods := []string{
-		"get",
+	return c
+}
+
+func (c HomeController) Get(writer ResponseWriter, request *Request) {
+	user, ok := UserFromContext(request.Context)
+	if !ok {
+		helper.InternalServerError(writer, errors.New("user should exist"))
+		return
 	}
 
-	for _, method := range methods {
-		switch method {
-		case "get":
-			for _, middleware := range middlewares {
-				if extensions, ok := middleware[method]; ok {
-					get = ExtendFnHandler(get, extensions...)
-				}
-			}
-		}
-	}
-
-	return HomeController{
-		Get: HandlerFunc(get),
+	err := c.templates["get"].Execute(writer, user)
+	if err != nil {
+		helper.InternalServerError(writer, err)
+		return
 	}
 }
 
-func (c HomeController) Router() *mux.Mux {
-	router := mux.NewMux()
-
-	routes := map[string]Handler{
+func (c HomeController) Handler(routes ...map[string]FnHandler) *Mux {
+	defaultRoutes := map[string]FnHandler{
 		"/": c.Get,
 	}
 
-	for pattern, handler := range routes {
-		router.AddRoute(pattern, handler)
+	var handlers map[string]FnHandler
+
+	if len(routes) > 0 {
+		handlers = routes[0]
+	} else {
+		handlers = defaultRoutes
+	}
+
+	router := mux.NewMux()
+
+	for pattern, handler := range handlers {
+		router.AddRoute(pattern, HandlerFunc(handler))
 	}
 
 	return router
+}
+
+func (c HomeController) ServeGemini(writer ResponseWriter, request *Request) {
+	if c.handler == nil {
+		c.handler = c.Handler()
+	}
+
+	c.handler.ServeGemini(writer, request)
 }

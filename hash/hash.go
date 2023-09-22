@@ -32,8 +32,8 @@ func HashPassword(password string, salt []byte) string {
 	return base64.RawStdEncoding.EncodeToString(hash)
 }
 
-// comparePasswords checks if the provided password hashes to the same value.
-func comparePasswords(password string, salt []byte, encodedHash string) bool {
+// ComparePasswords checks if the provided password hashes to the same value.
+func ComparePasswords(password string, salt []byte, encodedHash string) bool {
 	hash, err := base64.RawStdEncoding.DecodeString(encodedHash)
 	if err != nil {
 		return false

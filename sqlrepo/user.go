@@ -1,7 +1,6 @@
 package sqlrepo
 
 import (
-	"database/sql"
 	"github.com/binaryphile/lilleygram/model"
 	. "github.com/doug-martin/goqu/v9"
 
@@ -24,18 +23,16 @@ func NewUserRepo(db *Database, now fnTime) UserRepo {
 	}
 }
 
-func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) (_ string, err error) {
+func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) error {
 	query := r.db.
 		Insert("certificates").
 		Rows(
 			Record{"cert_sha256": sha256, "expire_at": expireAt, "user_id": userID},
 		)
 
-	if _, err = query.Executor().Exec(); err != nil {
-		return
-	}
+	_, err := query.Executor().Exec()
 
-	return sha256, nil
+	return err
 }
 
 func (r UserRepo) CertificateListByUser(userID uint64) (_ []model.Certificate, err error) {
@@ -60,9 +57,8 @@ func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, e
 			Record{"avatar": avatar, "first_name": firstName, "last_name": lastName, "user_name": userName},
 		)
 
-	var result sql.Result
-
-	if result, err = query.Executor().Exec(); err != nil {
+	result, err := query.Executor().Exec()
+	if err != nil {
 		return
 	}
 
@@ -102,6 +98,22 @@ func (r UserRepo) GetByCertificate(certSHA256 string) (_ model.User, found bool,
 		).
 		Where(
 			Ex{"cert_sha256": certSHA256},
+		)
+
+	if found, err = query.ScanStruct(&u); err != nil || !found {
+		return
+	}
+
+	return u, true, nil
+}
+
+func (r UserRepo) GetByUserName(userName string) (_ model.User, found bool, err error) {
+	var u model.User
+
+	query := r.db.
+		From("users").
+		Where(
+			Ex{"user_name": userName},
 		)
 
 	if found, err = query.ScanStruct(&u); err != nil || !found {

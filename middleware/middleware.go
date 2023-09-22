@@ -36,7 +36,7 @@ func ExtendFnHandler(handler FnHandler, extensions ...Middleware) FnHandler {
 	return extended
 }
 
-func ExtendRouter(handler Handler, extensions ...Middleware) HandlerFunc {
+func ExtendHandler(handler Handler, extensions ...Middleware) HandlerFunc {
 	return ExtendFnHandler(handler.ServeGemini, extensions...)
 }
 
@@ -54,25 +54,31 @@ func UserFromContext(ctx Context) (_ struct {
 	return user, ok
 }
 
-func WithAuthentication(authorizer FnAuthorize) Middleware {
+func WithRequiredAuthentication(authorizer FnAuthorize) Middleware {
 	return func(handler FnHandler) FnHandler {
 		return func(writer ResponseWriter, request *Request) {
+			_, ok := UserFromContext(request.Context)
+			if ok {
+				handler(writer, request)
+				return
+			}
+
 			certID := request.Certificate.ID
 
 			if certID == "" {
 				err := writer.SetHeader(gemini.CodeClientCertificateRequired, "client certificate required")
 				if err != nil {
-					log.Panic(err)
+					log.Print(err)
 				}
 
 				return
 			}
 
-			user, found := authorizer(certID, request.Certificate.Key)
-			if !found {
+			user, ok := authorizer(certID, request.Certificate.Key)
+			if !ok {
 				err := writer.SetHeader(gemini.CodeClientCertificateNotAuthorised, "not authorised")
 				if err != nil {
-					log.Panic(err)
+					log.Print(err)
 				}
 
 				return
@@ -80,7 +86,7 @@ func WithAuthentication(authorizer FnAuthorize) Middleware {
 
 			request.Context = context.WithValue(request.Context, keyUser, user)
 
-			HandlerFunc(handler).ServeGemini(writer, request)
+			handler(writer, request)
 		}
 	}
 }
@@ -91,9 +97,9 @@ func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {
 			certID := request.Certificate.ID
 
 			if certID != "" {
-				user, found := authorizer(certID, request.Certificate.Key)
+				user, ok := authorizer(certID, request.Certificate.Key)
 
-				if found {
+				if ok {
 					request.Context = context.WithValue(request.Context, keyUser, user)
 				}
 			}

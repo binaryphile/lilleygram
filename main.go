@@ -28,30 +28,28 @@ func main() {
 
 	db := goqu.New("sqlite3", sqlDB)
 
-	// create controllers
+	// create controllers/routers
 
 	userRepo := sqlrepo.NewUserRepo(db, unixNow)
 
 	certAuthorizer := newCertAuthorizer(userRepo)
 
-	userController := controller.NewUserController(userRepo)
-	userRouter := ExtendRouter(
-		userController.Router(),
-		WithAuthentication(certAuthorizer),
+	authorizedController := ExtendHandler(
+		mountHandlers(map[string]Handler{
+			"/":      controller.NewHomeController(),
+			"/users": controller.NewUserController(userRepo),
+		}),
+		WithRequiredAuthentication(certAuthorizer),
 	)
 
-	homeController := controller.NewHomeController()
-	homeRouter := ExtendRouter(
-		homeController.Router(),
+	unauthorizedController := controller.NewUnauthorizedController(userRepo)
+
+	rootHandler := ExtendHandler(
+		loginHandler(authorizedController, unauthorizedController),
 		WithOptionalAuthentication(certAuthorizer),
 	)
 
 	// set up the domain handler
-
-	rootHandler := mountRouters(map[string]Handler{
-		"/":      homeRouter,
-		"/users": userRouter,
-	})
 
 	certificate := tlsmust.LoadX509KeyPair(
 		opt.Getenv("LGRAM_X509_CERT_FILE").Or("server.crt"),
@@ -73,7 +71,19 @@ func main() {
 	}
 }
 
-func mountRouters(handlers map[string]Handler) HandlerFunc {
+func loginHandler(authorizedHandler, unauthorizedHandler Handler) HandlerFunc {
+	return func(writer ResponseWriter, request *Request) {
+		_, ok := UserFromContext(request.Context)
+		if ok {
+			authorizedHandler.ServeGemini(writer, request)
+			return
+		}
+
+		unauthorizedHandler.ServeGemini(writer, request)
+	}
+}
+
+func mountHandlers(handlers map[string]Handler) HandlerFunc {
 	return func(writer ResponseWriter, request *Request) {
 		path := strings.TrimPrefix(request.URL.Path, "/")
 
