@@ -1,6 +1,7 @@
 package sqlrepo
 
 import (
+	"errors"
 	"github.com/binaryphile/lilleygram/model"
 	. "github.com/doug-martin/goqu/v9"
 
@@ -89,8 +90,6 @@ func (r UserRepo) Get(id uint64) (_ model.User, found bool, err error) {
 }
 
 func (r UserRepo) GetByCertificate(certSHA256 string) (_ model.User, found bool, err error) {
-	var u model.User
-
 	query := r.db.
 		From("users").
 		Join(
@@ -99,6 +98,8 @@ func (r UserRepo) GetByCertificate(certSHA256 string) (_ model.User, found bool,
 		Where(
 			Ex{"cert_sha256": certSHA256},
 		)
+
+	var u model.User
 
 	if found, err = query.ScanStruct(&u); err != nil || !found {
 		return
@@ -167,6 +168,53 @@ func (r UserRepo) PasswordSet(userID uint64, password model.Password) error {
 		if _, err = query.Executor().Exec(); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (r UserRepo) ProfileGet(userID uint64) (_ model.Profile, _ []model.Certificate, found bool, err error) {
+	var profile model.Profile
+
+	query := r.db.
+		From("users").
+		LeftOuterJoin(
+			T("passwords"), On(Ex{"users.id": I("passwords.user_id")}),
+		).
+		Where(Ex{"id": userID})
+
+	if found, err = query.ScanStruct(&profile); err != nil || !found {
+		return
+	}
+
+	certificates, err := r.CertificateListByUser(userID)
+	if err != nil {
+		return
+	}
+
+	return profile, certificates, true, nil
+}
+
+func (r UserRepo) UpdateSeen(userID uint64) error {
+	query := r.db.
+		Update("users").
+		Where(Ex{"id": userID}).
+		Set(
+			Record{"last_seen": r.now()},
+		)
+
+	result, err := query.Executor().Exec()
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return errors.New("no rows affected")
 	}
 
 	return nil

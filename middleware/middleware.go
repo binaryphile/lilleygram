@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/a-h/gemini"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/helper"
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"log"
 )
@@ -13,11 +14,7 @@ const (
 )
 
 type (
-	FnAuthorize = func(certID, certKey string) (struct {
-		Avatar   string
-		ID       uint64
-		UserName string
-	}, bool)
+	FnAuthorize = func(certID, certKey string) (helper.User, bool)
 
 	FnHandler = func(ResponseWriter, *Request)
 
@@ -40,18 +37,28 @@ func ExtendHandler(handler Handler, extensions ...Middleware) HandlerFunc {
 	return ExtendFnHandler(handler.ServeGemini, extensions...)
 }
 
-func UserFromContext(ctx Context) (_ struct {
-	Avatar   string
-	ID       uint64
-	UserName string
-}, ok bool) {
-	user, ok := ctx.Value(keyUser).(struct {
-		Avatar   string
-		ID       uint64
-		UserName string
-	})
+func UserFromContext(ctx Context) (_ helper.User, ok bool) {
+	user, ok := ctx.Value(keyUser).(helper.User)
 
 	return user, ok
+}
+
+func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {
+	return func(handler FnHandler) FnHandler {
+		return func(w ResponseWriter, request *Request) {
+			certID := request.Certificate.ID
+
+			if certID != "" {
+				user, ok := authorizer(certID, request.Certificate.Key)
+
+				if ok {
+					request.Context = context.WithValue(request.Context, keyUser, user)
+				}
+			}
+
+			handler(w, request)
+		}
+	}
 }
 
 func WithRequiredAuthentication(authorizer FnAuthorize) Middleware {
@@ -87,24 +94,6 @@ func WithRequiredAuthentication(authorizer FnAuthorize) Middleware {
 			request.Context = context.WithValue(request.Context, keyUser, user)
 
 			handler(writer, request)
-		}
-	}
-}
-
-func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {
-	return func(handler FnHandler) FnHandler {
-		return func(w ResponseWriter, request *Request) {
-			certID := request.Certificate.ID
-
-			if certID != "" {
-				user, ok := authorizer(certID, request.Certificate.Key)
-
-				if ok {
-					request.Context = context.WithValue(request.Context, keyUser, user)
-				}
-			}
-
-			handler(w, request)
 		}
 	}
 }

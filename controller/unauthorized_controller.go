@@ -86,7 +86,7 @@ func (c UnauthorizedController) UserNameCheck(writer ResponseWriter, request *Re
 	if !found {
 		_, err = writer.Write([]byte(Heredoc(`
 			That user was not found.  If you feel this result was in error, click the link below to try again.
-			=> /register/username/check Resubmit User
+			=> /register/username/check Resubmit helperUser
 		`)))
 		if err != nil {
 			helper.InternalServerError(writer, err)

@@ -8,6 +8,8 @@ import (
 	"github.com/a-h/gemini"
 	"github.com/binaryphile/lilleygram/controller"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/handler"
+	"github.com/binaryphile/lilleygram/helper"
 	. "github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
@@ -36,8 +38,9 @@ func main() {
 
 	authorizedController := ExtendHandler(
 		mountHandlers(map[string]Handler{
-			"/":      controller.NewHomeController(),
-			"/users": controller.NewUserController(userRepo),
+			"/":         controller.NewHomeController(),
+			"/users":    controller.NewUserController(userRepo),
+			"/register": handler.UserNameCheck(),
 		}),
 		WithRequiredAuthentication(certAuthorizer),
 	)
@@ -89,8 +92,8 @@ func mountHandlers(handlers map[string]Handler) HandlerFunc {
 
 		first, _, _ := strings.Cut(path, "/")
 
-		if handler, ok := handlers["/"+first]; ok {
-			handler.ServeGemini(writer, request)
+		if h, ok := handlers["/"+first]; ok {
+			h.ServeGemini(writer, request)
 		} else {
 			gemini.NotFound(writer, request)
 		}
@@ -98,11 +101,7 @@ func mountHandlers(handlers map[string]Handler) HandlerFunc {
 }
 
 func newCertAuthorizer(repo sqlrepo.UserRepo) FnAuthorize {
-	return func(certID, _ string) (_ struct {
-		Avatar   string
-		ID       uint64
-		UserName string
-	}, ok bool) {
+	return func(certID, _ string) (_ helper.User, ok bool) {
 		hash := sha256.Sum256([]byte(certID))
 
 		certSHA256 := hex.EncodeToString(hash[:])
@@ -113,13 +112,14 @@ func newCertAuthorizer(repo sqlrepo.UserRepo) FnAuthorize {
 			return
 		}
 
-		return struct {
-			Avatar   string
-			ID       uint64
-			UserName string
-		}{
+		err = repo.UpdateSeen(user.ID)
+		if err != nil {
+			log.Print(err)
+		}
+
+		return helper.User{
 			Avatar:   user.Avatar,
-			ID:       user.ID,
+			UserID:   user.ID,
 			UserName: user.UserName,
 		}, true
 	}

@@ -6,9 +6,9 @@ import (
 )
 
 type Certificate struct {
-	CreatedAt int64  `db:"created_at"`
-	ExpireAt  int64  `db:"expire_at"`
 	SHA256    string `db:"cert_sha256"`
+	ExpireAt  int64  `db:"expire_at"`
+	CreatedAt int64  `db:"created_at"`
 	UpdatedAt int64  `db:"updated_at"`
 }
 

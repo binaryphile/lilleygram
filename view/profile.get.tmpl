@@ -1,0 +1,31 @@
+{{template "base" . -}}
+{{define "main" -}}
+# {{.Avatar}} {{.UserName}}'s Profile
+
+## Name
+{{.FirstName}} {{.LastName}}
+
+## Joined
+{{.CreatedAt}}
+
+{{if not .Me}}## Last seen
+{{.LastSeen}}
+
+{{else -}}
+## Password
+Password is {{if not .PasswordFound}}not {{end}}set
+
+=> /users/{{.UserID}}/password/set {{if .PasswordFound}}Reset{{else}}Set{{end}} password
+
+{{end -}}
+## Certificates
+
+=> /register/username/check Add a certificate
+
+{{range $index, $cert := .Certificates -}}
+### Certificate #{{incr $index}}
+Created At: {{$cert.CreatedAt}}
+{{if $cert.ExpireAt}}Expire At: {{$cert.ExpireAt}}
+{{end}}
+{{end -}}
+{{end -}}

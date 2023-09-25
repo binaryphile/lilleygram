@@ -1,0 +1,8 @@
+{{template "base" . -}}
+{{define "main" -}}
+In order to add a certificate, you will need to disable your current certificate in your browser and reload this page.
+
+If you are trying to add a certificate for another client/device, the simplest thing to do is connect from that client with the new certificate.  Then, visit this URL and register the certificate using your password.  You will need to have set a password to do this.  If you haven't done so already, set your password now.
+
+=> /users/{{.UserID}}/password/set Set a password
+{{end -}}
