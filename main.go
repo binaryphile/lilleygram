@@ -36,15 +36,28 @@ func main() {
 
 	certAuthorizer := newCertAuthorizer(userRepo)
 
+	authorizedBaseTemplates := []string{
+		"view/layout/base.tmpl",
+		"view/partial/footer.tmpl",
+		"view/partial/nav.tmpl",
+	}
+
+	// the authorizedController operates behind required authentication.
+	// the logged-in user experience is here.
 	authorizedController := ExtendHandler(
 		mountHandlers(map[string]Handler{
-			"/":         controller.NewHomeController(),
-			"/users":    controller.NewUserController(userRepo),
-			"/register": handler.UserNameCheck(),
+			"/":                handler.FileHandler(append([]string{"view/home.get.tmpl"}, authorizedBaseTemplates...)...),
+			"/getting-started": handler.FileHandler(append([]string{"view/unauthorized/getting-started.tmpl"}, authorizedBaseTemplates...)...),
+			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authorizedBaseTemplates...)...),
+			"/users":           controller.NewUserController(userRepo),
 		}),
 		WithRequiredAuthentication(certAuthorizer),
 	)
 
+	// the unauthorizedController operates behind optional authentication.
+	// the authorizedController also relies on the optional authentication
+	// to identify the certificate, so the two controllers are combined
+	// before being extended with optional authentication.
 	unauthorizedController := controller.NewUnauthorizedController(userRepo)
 
 	rootHandler := ExtendHandler(

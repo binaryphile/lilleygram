@@ -8,12 +8,8 @@ import (
 	"text/template"
 )
 
-func UserNameCheck() Handler {
-	tmpl, err := template.ParseFiles(
-		"view/register.tmpl",
-		"view/layout/base.tmpl",
-		"view/partial/nav.tmpl",
-	)
+func FileHandler(fileNames ...string) Handler {
+	tmpl, err := template.ParseFiles(fileNames...)
 	if err != nil {
 		log.Panic(err)
 	}
