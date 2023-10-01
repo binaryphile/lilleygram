@@ -89,7 +89,7 @@ func main() {
 
 func loginHandler(authorizedHandler, unauthorizedHandler Handler) HandlerFunc {
 	return func(writer ResponseWriter, request *Request) {
-		_, ok := UserFromContext(request.Context)
+		_, ok := UserFromRequest(request)
 		if ok {
 			authorizedHandler.ServeGemini(writer, request)
 			return

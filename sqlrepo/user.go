@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/binaryphile/lilleygram/model"
 	. "github.com/doug-martin/goqu/v9"
-
 	_ "github.com/doug-martin/goqu/v9/dialect/sqlite3"
 )
 
@@ -12,6 +11,11 @@ type (
 	UserRepo struct {
 		db  *Database
 		now func() int64
+		tx  *TxDatabase
+	}
+
+	Inserter interface {
+		Insert(interface{}) *InsertDataset
 	}
 
 	fnTime = func() int64
@@ -24,8 +28,44 @@ func NewUserRepo(db *Database, now fnTime) UserRepo {
 	}
 }
 
+func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, err error) {
+	var db Inserter
+
+	if r.tx != nil {
+		db = r.db
+	} else {
+		db = r.tx
+	}
+
+	query := db.
+		Insert("users").
+		Rows(
+			Record{"avatar": avatar, "first_name": firstName, "last_name": lastName, "user_name": userName},
+		)
+
+	result, err := query.Executor().Exec()
+	if err != nil {
+		return
+	}
+
+	userID, err := result.LastInsertId()
+	if err != nil {
+		return
+	}
+
+	return uint64(userID), nil
+}
+
 func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) error {
-	query := r.db.
+	var db Inserter
+
+	if r.tx != nil {
+		db = r.tx
+	} else {
+		db = r.db
+	}
+
+	query := db.
 		Insert("certificates").
 		Rows(
 			Record{"cert_sha256": sha256, "expire_at": expireAt, "user_id": userID},
@@ -51,24 +91,27 @@ func (r UserRepo) CertificateListByUser(userID uint64) (_ []model.Certificate, e
 	return certificates, nil
 }
 
-func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, err error) {
+func (r UserRepo) CodeGet(_ uint64) (_ string, found bool, err error) {
+	var code string
+
 	query := r.db.
-		Insert("users").
-		Rows(
-			Record{"avatar": avatar, "first_name": firstName, "last_name": lastName, "user_name": userName},
-		)
+		From("registration").
+		Select("code").
+		Limit(1)
 
-	result, err := query.Executor().Exec()
-	if err != nil {
+	if found, err = query.ScanVal(&code); err != nil || !found {
 		return
 	}
 
-	userID, err := result.LastInsertId()
-	if err != nil {
-		return
+	return code, true, nil
+}
+
+func (r UserRepo) Commit() (_ error) {
+	if r.tx != nil {
+		return r.tx.Commit()
 	}
 
-	return uint64(userID), nil
+	return
 }
 
 func (r UserRepo) Get(id uint64) (_ model.User, found bool, err error) {
@@ -195,6 +238,77 @@ func (r UserRepo) ProfileGet(userID uint64) (_ model.Profile, _ []model.Certific
 	return profile, certificates, true, nil
 }
 
+func (r UserRepo) Rollback() (_ error) {
+	if r.tx != nil {
+		return r.tx.Rollback()
+	}
+
+	return
+}
+
+func (r UserRepo) Begin() (_ UserRepo, err error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return
+	}
+
+	return UserRepo{
+		db:  r.db,
+		now: r.now,
+		tx:  tx,
+	}, nil
+}
+
+func (r UserRepo) UpdateFirstName(userID uint64, firstName string) error {
+	query := r.db.
+		Update("users").
+		Where(Ex{"id": userID}).
+		Set(
+			Record{"first_name": firstName, "updated_at": r.now()},
+		)
+
+	result, err := query.Executor().Exec()
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return errors.New("no rows affected")
+	}
+
+	return nil
+}
+
+func (r UserRepo) UpdateLastName(userID uint64, lastName string) error {
+	query := r.db.
+		Update("users").
+		Where(Ex{"id": userID}).
+		Set(
+			Record{"last_name": lastName, "updated_at": r.now()},
+		)
+
+	result, err := query.Executor().Exec()
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return errors.New("no rows affected")
+	}
+
+	return nil
+}
+
 func (r UserRepo) UpdateSeen(userID uint64) error {
 	query := r.db.
 		Update("users").
@@ -218,4 +332,49 @@ func (r UserRepo) UpdateSeen(userID uint64) error {
 	}
 
 	return nil
+}
+
+func (r UserRepo) UpdateUserName(userID uint64, userName string) error {
+	query := r.db.
+		Update("users").
+		Where(Ex{"id": userID}).
+		Set(
+			Record{"user_name": userName, "updated_at": r.now()},
+		)
+
+	result, err := query.Executor().Exec()
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return errors.New("no rows affected")
+	}
+
+	return nil
+}
+
+// WithTx starts a new transaction and executes it in Wrap method
+func (r UserRepo) WithTx(fn func(UserRepo) error) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	repo := UserRepo{
+		db:  r.db,
+		now: r.now,
+		tx:  tx,
+	}
+
+	return tx.Wrap(
+		func() error {
+			return fn(repo)
+		},
+	)
 }

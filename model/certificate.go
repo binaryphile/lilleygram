@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/argoproj/pkg/humanize"
+	"github.com/dustin/go-humanize"
 	"time"
 )
 
@@ -35,9 +35,9 @@ func (c Certificate) GetUpdatedAt() string {
 func humanTime(unixTime int64) string {
 	unix := time.Unix(unixTime, 0)
 
-	if time.Since(unix) > 168*time.Hour {
-		return unix.Format("02 Jan 2006 15:04")
+	if time.Since(unix) > 48*time.Hour {
+		return unix.Format("02 Jan 2006 03:04PM")
 	}
 
-	return humanize.RelativeDuration(time.Now(), unix)
+	return humanize.Time(unix)
 }

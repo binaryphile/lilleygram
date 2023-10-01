@@ -3,10 +3,11 @@ package middleware
 import (
 	"context"
 	"github.com/a-h/gemini"
+	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/helper"
-	. "github.com/binaryphile/lilleygram/shortcuts"
 	"log"
+	"strconv"
 )
 
 const (
@@ -16,14 +17,12 @@ const (
 type (
 	FnAuthorize = func(certID, certKey string) (helper.User, bool)
 
-	FnHandler = func(ResponseWriter, *Request)
-
-	Middleware = func(FnHandler) FnHandler
+	Middleware = func(Handler) Handler
 
 	contextKey string
 )
 
-func ExtendFnHandler(handler FnHandler, extensions ...Middleware) FnHandler {
+func ExtendHandler(handler Handler, extensions ...Middleware) Handler {
 	extended := handler
 
 	for _, extend := range extensions {
@@ -33,19 +32,37 @@ func ExtendFnHandler(handler FnHandler, extensions ...Middleware) FnHandler {
 	return extended
 }
 
-func ExtendHandler(handler Handler, extensions ...Middleware) HandlerFunc {
-	return ExtendFnHandler(handler.ServeGemini, extensions...)
+func EyesOnly(handler Handler) Handler {
+	return HandlerFunc(func(writer ResponseWriter, request *Request) {
+		user, _ := UserFromRequest(request)
+
+		strID, _ := PathVarFromRequest("userID", request)
+
+		intID, err := strconv.Atoi(strID)
+		if err != nil {
+			return
+		}
+
+		pathUserID := uint64(intID)
+
+		if user.UserID != pathUserID {
+			gemini.NotFound(writer, request)
+			return
+		}
+
+		handler.ServeGemini(writer, request)
+	})
 }
 
-func UserFromContext(ctx Context) (_ helper.User, ok bool) {
-	user, ok := ctx.Value(keyUser).(helper.User)
+func UserFromRequest(r *Request) (_ helper.User, ok bool) {
+	user, ok := r.Context.Value(keyUser).(helper.User)
 
 	return user, ok
 }
 
 func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {
-	return func(handler FnHandler) FnHandler {
-		return func(w ResponseWriter, request *Request) {
+	return func(handler Handler) Handler {
+		return HandlerFunc(func(w ResponseWriter, request *Request) {
 			certID := request.Certificate.ID
 
 			if certID != "" {
@@ -56,17 +73,17 @@ func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {
 				}
 			}
 
-			handler(w, request)
-		}
+			handler.ServeGemini(w, request)
+		})
 	}
 }
 
 func WithRequiredAuthentication(authorizer FnAuthorize) Middleware {
-	return func(handler FnHandler) FnHandler {
-		return func(writer ResponseWriter, request *Request) {
-			_, ok := UserFromContext(request.Context)
+	return func(handler Handler) Handler {
+		return HandlerFunc(func(writer ResponseWriter, request *Request) {
+			_, ok := UserFromRequest(request)
 			if ok {
-				handler(writer, request)
+				handler.ServeGemini(writer, request)
 				return
 			}
 
@@ -93,7 +110,21 @@ func WithRequiredAuthentication(authorizer FnAuthorize) Middleware {
 
 			request.Context = context.WithValue(request.Context, keyUser, user)
 
-			handler(writer, request)
-		}
+			handler.ServeGemini(writer, request)
+		})
 	}
+}
+
+func PathVarFromRequest(key string, request *Request) (_ string, ok bool) {
+	route, ok := mux.GetMatchedRoute(request.Context)
+	if !ok {
+		return
+	}
+
+	s, ok := route.PathVars[key]
+	if !ok {
+		return
+	}
+
+	return s, true
 }

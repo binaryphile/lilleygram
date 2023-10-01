@@ -1,18 +1,18 @@
 package controller
 
 import (
-	"encoding/hex"
+	"bytes"
 	"fmt"
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
-	"github.com/argoproj/pkg/humanize"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/helper"
-	. "github.com/binaryphile/lilleygram/middleware"
+	"github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/model"
 	. "github.com/binaryphile/lilleygram/must"
+	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
-	"log"
+	"github.com/dustin/go-humanize"
 	"path/filepath"
 	"strconv"
 	"text/template"
@@ -60,47 +60,15 @@ func NewUserController(repo sqlrepo.UserRepo) UserController {
 	return c
 }
 
-func (c UserController) CertificateAdd(writer ResponseWriter, request *Request) {
-	if request.URL.RawQuery == "" {
-		err := writer.SetHeader(gemini.CodeInput, "Certificate's SHA256:")
-		if err != nil {
-			helper.InternalServerError(writer, err)
-			return
-		}
-
-		return
-	}
-
-	user, _ := UserFromContext(request.Context)
-
-	sha256 := request.URL.RawQuery
-
-	bad := len(sha256) != 64
-
-	if !bad {
-		_, err := hex.DecodeString(sha256)
-		bad = err != nil
-	}
-
-	if bad {
-		gemini.BadRequest(writer, request)
-		log.Print("bad sha256")
-		return
-	}
-
-	err := c.repo.CertificateAdd(sha256, 0, user.UserID)
-	if err != nil {
-		helper.InternalServerError(writer, err)
-		return
-	}
-}
-
 func (c UserController) CertificateList(writer ResponseWriter, request *Request) {
-	user, _ := UserFromContext(request.Context)
+	var err error
+
+	defer writeError(writer, err)
+
+	user, _ := middleware.UserFromRequest(request)
 
 	certificates, err := c.repo.CertificateListByUser(user.UserID)
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
 	}
 
@@ -114,77 +82,131 @@ func (c UserController) CertificateList(writer ResponseWriter, request *Request)
 
 	err = c.templates["certificateList"].Execute(writer, data)
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
 	}
 }
 
-func (c UserController) Get(writer ResponseWriter, request *Request) {
-	user, _ := UserFromContext(request.Context)
+func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
+	var err error
 
-	u, found, err := c.repo.Get(user.UserID)
-	if err != nil || !found {
-		helper.InternalServerError(writer, err)
-		return
-	}
+	defer writeError(writer, err)
 
-	_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", u.ID, u.FirstName, u.LastName, u.UserName)))
+	user, _ := middleware.UserFromRequest(request)
+
+	strID, _ := middleware.PathVarFromRequest("userID", request)
+
+	intID, err := strconv.Atoi(strID)
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
 	}
-}
 
-func (c UserController) Handler(routes ...map[string]FnHandler) *Mux {
-	defaultRoutes := map[string]FnHandler{
-		"/users":                           c.List,
-		"/users/{userID}":                  c.Get,
-		"/users/{userID}/certificates":     c.CertificateList,
-		"/users/{userID}/certificates/add": c.CertificateAdd,
-		"/users/{userID}/password":         c.PasswordGet,
-		"/users/{userID}/password/set":     c.PasswordSet,
-		"/users/{userID}/profile":          c.ProfileGet,
+	pathUserID := uint64(intID)
+
+	if user.UserID != pathUserID {
+		gemini.NotFound(writer, request)
+		return
 	}
 
-	var handlers map[string]FnHandler
+	if request.URL.RawQuery == "" {
+		err = helper.InputPrompt(writer, "Enter your first name:")
+		return
+	}
+
+	firstName, ok := helper.ValidateName(request.URL.RawQuery)
+	if !ok {
+		_, err = writer.Write([]byte(Heredoc(`
+			Name must be between 1 and 25 characters and may include letters, space, apostrophe and hyphen.
+			=> set Try again
+		`)))
+		if err != nil {
+			return
+		}
+	}
+
+	err = c.repo.UpdateFirstName(pathUserID, firstName)
+	if err != nil { // TODO: userName conflict
+		return
+	}
+
+	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/lastname/set", pathUserID))
+}
+
+func (c UserController) Handler(routes ...map[string]Handler) *Mux {
+	var handlers map[string]Handler
 
 	if len(routes) > 0 {
 		handlers = routes[0]
 	} else {
-		handlers = defaultRoutes
+		handlers = c.Routes()
 	}
 
 	router := mux.NewMux()
 
-	for pattern, handler := range handlers {
-		router.AddRoute(pattern, HandlerFunc(handler))
+	for pattern, h := range handlers {
+		router.AddRoute(pattern, h)
 	}
 
 	return router
 }
 
+func (c UserController) LastNameSet(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
+	u, _ := middleware.UserFromRequest(request)
+
+	if request.URL.RawQuery == "" {
+		err = helper.InputPrompt(writer, "Enter your last name:")
+		return
+	}
+
+	lastName, ok := helper.ValidateName(request.URL.RawQuery)
+	if !ok {
+		_, err = writer.Write([]byte(Heredoc(`
+			Name must be between 1 and 25 characters and may include letters, space, apostrophe and hyphen.
+			=> set Try again
+		`)))
+		if err != nil {
+			return
+		}
+	}
+
+	err = c.repo.UpdateLastName(u.UserID, lastName)
+	if err != nil { // TODO: userName conflict
+		return
+	}
+
+	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/profile", u.UserID))
+}
+
 func (c UserController) List(writer ResponseWriter, request *Request) {
-	user, _ := UserFromContext(request.Context)
+	var err error
+
+	defer writeError(writer, err)
+
+	user, _ := middleware.UserFromRequest(request)
 
 	u, found, err := c.repo.Get(user.UserID)
 	if err != nil || !found {
-		helper.InternalServerError(writer, err)
 		return
 	}
 
 	_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", u.ID, u.FirstName, u.LastName, u.UserName)))
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
 	}
 }
 
 func (c UserController) PasswordGet(writer ResponseWriter, request *Request) {
-	user, _ := UserFromContext(request.Context)
+	var err error
+
+	defer writeError(writer, err)
+
+	user, _ := middleware.UserFromRequest(request)
 
 	password, _, err := c.repo.PasswordGet(user.UserID)
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
 	}
 
@@ -198,40 +220,94 @@ func (c UserController) PasswordGet(writer ResponseWriter, request *Request) {
 
 	err = c.templates["passwordGet"].Execute(writer, data)
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
 	}
 }
 
 func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
 	if request.URL.RawQuery == "" {
-		err := helper.InputSensitive(writer, "New Password:")
-		if err != nil {
-			log.Print(err)
-		}
+		err = helper.InputSensitive(writer, "New Password:\n(at least 8 characters, at least one upper case, lower case, digit and special character)")
 		return
 	}
 
-	user, _ := UserFromContext(request.Context)
+	user, _ := middleware.UserFromRequest(request)
 
 	password := request.URL.RawQuery
 
-	p := model.NewPassword(password)
+	p, length, upper, lower, digit, special := model.NewPassword(password)
+	if !(length && upper && lower && digit && special) {
+		response := bytes.Buffer{}
 
-	err := c.repo.PasswordSet(user.UserID, p)
+		write := Must1(response.WriteString)
+
+		write(Heredoc(`
+			# Insufficient password complexity
+
+			Try again and choose a password that meets the following requirements.
+
+			Asterisks indicate unsatisfied requirements.
+
+			Password must be at least:
+
+		`))
+
+		write("* 8 characters")
+
+		if !length {
+			write(" (*)")
+		}
+
+		write("\n\nand at least of each of:\n\n")
+
+		write("* upper case")
+
+		if !upper {
+			write(" (*)")
+		}
+
+		write("\n* lower case")
+
+		if !lower {
+			write(" (*)")
+		}
+
+		write("\n* a digit")
+
+		if !digit {
+			write(" (*)")
+		}
+
+		write("\n* a special character")
+
+		if !special {
+			write(" (*)")
+		}
+
+		write("\n=> set Try Again\n")
+
+		_, err = writer.Write(response.Bytes())
+		if err != nil {
+			return
+		}
+	}
+
+	err = c.repo.PasswordSet(user.UserID, p)
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, ".")
-	if err != nil {
-		helper.InternalServerError(writer, err)
-		return
-	}
+	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/profile", user.UserID))
 }
 
 func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
 	route, ok := mux.GetMatchedRoute(request.Context)
 	if !ok {
 		gemini.BadRequest(writer, request)
@@ -252,11 +328,10 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 	userID := uint64(i)
 
-	u, _ := UserFromContext(request.Context)
+	u, _ := middleware.UserFromRequest(request)
 
 	p, cs, found, err := c.repo.ProfileGet(userID)
 	if err != nil || !found {
-		helper.InternalServerError(writer, fmt.Errorf("profile not found: %w", err))
 		return
 	}
 
@@ -284,8 +359,20 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 	err = c.templates["profileGet"].Execute(writer, profile)
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
+	}
+}
+
+func (c UserController) Routes() map[string]Handler {
+	return map[string]Handler{
+		"/users":                        HandlerFunc(c.List),
+		"/users/{userID}/certificates":  HandlerFunc(c.CertificateList),
+		"/users/{userID}/firstname/set": middleware.EyesOnly(HandlerFunc(c.FirstNameSet)),
+		"/users/{userID}/lastname/set":  middleware.EyesOnly(HandlerFunc(c.LastNameSet)),
+		"/users/{userID}/password":      HandlerFunc(c.PasswordGet),
+		"/users/{userID}/password/set":  middleware.EyesOnly(HandlerFunc(c.PasswordSet)),
+		"/users/{userID}/profile":       HandlerFunc(c.ProfileGet),
+		"/users/{userID}/username/set":  middleware.EyesOnly(HandlerFunc(c.UserNameSet)),
 	}
 }
 
@@ -305,8 +392,30 @@ func humanTime(unixTime int64) string {
 	unix := time.Unix(unixTime, 0)
 
 	if time.Since(unix) > 48*time.Hour {
-		return unix.Format("02 Jan 2006 15:04")
+		return unix.Format("02 Jan 2006 03:04PM")
 	}
 
-	return humanize.RelativeDuration(unix, time.Now().UTC())
+	return humanize.Time(unix)
+}
+
+func (c UserController) UserNameSet(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
+	u, _ := middleware.UserFromRequest(request)
+
+	if request.URL.RawQuery == "" {
+		err = helper.InputPrompt(writer, "Choose your (permanent) username:")
+		return
+	}
+
+	userName := request.URL.RawQuery
+
+	err = c.repo.UpdateUserName(u.UserID, userName)
+	if err != nil { // TODO: userName conflict
+		return
+	}
+
+	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
 }

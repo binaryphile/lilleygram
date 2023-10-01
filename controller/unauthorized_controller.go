@@ -16,60 +16,21 @@ import (
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
 	"strconv"
-	"text/template"
 )
 
 type (
 	UnauthorizedController struct {
-		baseTemplates []string
-		handler       *Mux
-		repo          sqlrepo.UserRepo
-		templates     map[string]*Template
+		handler *Mux
+		repo    sqlrepo.UserRepo
 	}
 )
 
 func NewUnauthorizedController(repo sqlrepo.UserRepo) UnauthorizedController {
 	c := UnauthorizedController{
-		baseTemplates: []string{
-			"view/unauthorized/partial/nav.tmpl",
-			"view/layout/base.tmpl",
-			"view/partial/footer.tmpl",
-		},
-		repo:      repo,
-		templates: make(map[string]*Template),
-	}
-
-	{
-		templates := append([]string{"view/unauthorized/home.get.tmpl"}, c.baseTemplates...)
-
-		tmpl, err := template.ParseFiles(templates...)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		c.templates["get"] = tmpl
-	}
-
-	{
-		templates := append([]string{"view/unauthorized/register.tmpl"}, c.baseTemplates...)
-
-		tmpl, err := template.ParseFiles(templates...)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		c.templates["register"] = tmpl
+		repo: repo,
 	}
 
 	return c
-}
-
-func (c UnauthorizedController) Get(writer ResponseWriter, _ *Request) {
-	err := c.templates["get"].Execute(writer, nil)
-	if err != nil {
-		helper.InternalServerError(writer, err)
-		return
-	}
 }
 
 func (c UnauthorizedController) Handler(routes ...map[string]Handler) *Mux {
@@ -181,21 +142,87 @@ func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *R
 	}
 }
 
-func (c UnauthorizedController) Register(writer ResponseWriter, request *Request) {
-	err := c.templates["register"].Execute(writer, request)
+func (c UnauthorizedController) CodeCheck(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
+	if request.URL.RawQuery == "" {
+		err = helper.InputSensitive(writer, "Registration code:")
+		return
+	}
+
+	userCode := request.URL.RawQuery
+
+	code, found, err := c.repo.CodeGet(0)
+	if err != nil || !found || userCode != code {
+		_, writeErr := writer.Write([]byte(Heredoc(`
+			Registrations are not open at the moment.
+			=> / Go Home
+		`)))
+		if writeErr != nil {
+			err = writeErr
+		}
+
+		return
+	}
+
+	certID := request.Certificate.ID
+
+	if certID == "" {
+		_, writeErr := writer.Write([]byte(Heredoc(`
+				Error: no certificate supplied.  Please enable your certificate and try again.
+				=> . Try Again
+			`)))
+		if writeErr != nil {
+			err = writeErr
+		}
+
+		return
+	}
+
+	idHash := sha256.Sum256([]byte(certID))
+
+	certSHA256 := hex.EncodeToString(idHash[:])
+
+	var userID uint64
+
+	err = c.repo.WithTx(
+		func(tx sqlrepo.UserRepo) (err error) {
+			userID, err = tx.Add("", "", "", "")
+			if err != nil {
+				return
+			}
+
+			return tx.CertificateAdd(certSHA256, 0, userID)
+		},
+	)
 	if err != nil {
-		helper.InternalServerError(writer, err)
+		return
+	}
+
+	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/profile", userID))
+	if err != nil {
 		return
 	}
 }
 
 func (c UnauthorizedController) Routes() map[string]Handler {
-	gettingStartedTemplates := append([]string{"view/unauthorized/getting-started.tmpl"}, c.baseTemplates...)
+	baseTemplates := []string{
+		"view/unauthorized/partial/nav.tmpl",
+		"view/layout/base.tmpl",
+		"view/partial/footer.tmpl",
+	}
+
+	getTemplates := append([]string{"view/unauthorized/home.get.tmpl"}, baseTemplates...)
+	gettingStartedTemplates := append([]string{"view/unauthorized/getting-started.tmpl"}, baseTemplates...)
+	registerTemplates := append([]string{"view/unauthorized/register.tmpl"}, baseTemplates...)
 
 	return map[string]Handler{
-		"/":                                  HandlerFunc(c.Get),
+		"/":                                  handler.FileHandler(getTemplates...),
 		"/getting-started":                   handler.FileHandler(gettingStartedTemplates...),
-		"/register":                          HandlerFunc(c.Register),
+		"/register":                          handler.FileHandler(registerTemplates...),
+		"/register/code/check":               HandlerFunc(c.CodeCheck),
 		"/register/username/check":           HandlerFunc(c.UserNameCheck),
 		"/register/{userid}/certificate/add": HandlerFunc(c.CertificateAdd),
 	}
@@ -210,10 +237,13 @@ func (c UnauthorizedController) ServeGemini(writer ResponseWriter, request *Requ
 }
 
 func (c UnauthorizedController) UserNameCheck(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
 	if request.URL.RawQuery == "" {
-		err := helper.InputPrompt(writer, "Provide your account's username:")
+		err = helper.InputPrompt(writer, "Provide your account's username:")
 		if err != nil {
-			helper.InternalServerError(writer, err)
 			return
 		}
 
@@ -224,7 +254,6 @@ func (c UnauthorizedController) UserNameCheck(writer ResponseWriter, request *Re
 
 	user, found, err := c.repo.GetByUserName(userName)
 	if err != nil {
-		helper.InternalServerError(writer, err)
 		return
 	}
 
@@ -234,14 +263,15 @@ func (c UnauthorizedController) UserNameCheck(writer ResponseWriter, request *Re
 			=> /register/username/check Resubmit helperUser
 		`)))
 		if err != nil {
-			helper.InternalServerError(writer, err)
 			return
 		}
 	}
 
 	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/register/%d/certificate/add", user.ID))
+}
+
+func writeError(writer ResponseWriter, err error) {
 	if err != nil {
 		helper.InternalServerError(writer, err)
-		return
 	}
 }
