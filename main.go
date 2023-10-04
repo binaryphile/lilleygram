@@ -36,6 +36,8 @@ func main() {
 
 	certAuthorizer := newCertAuthorizer(userRepo)
 
+	gramHandler := controller.NewGramController(sqlrepo.NewGramRepo(db, unixNow))
+
 	authorizedBaseTemplates := []string{
 		"view/layout/base.tmpl",
 		"view/partial/footer.tmpl",
@@ -46,7 +48,8 @@ func main() {
 	// the logged-in user experience is here.
 	authorizedController := ExtendHandler(
 		mountHandlers(map[string]Handler{
-			"/":                handler.FileHandler(append([]string{"view/home.get.tmpl"}, authorizedBaseTemplates...)...),
+			"/":                gramHandler,
+			"/grams":           gramHandler,
 			"/getting-started": handler.FileHandler(append([]string{"view/unauthorized/getting-started.tmpl"}, authorizedBaseTemplates...)...),
 			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authorizedBaseTemplates...)...),
 			"/users":           controller.NewUserController(userRepo),
@@ -89,8 +92,7 @@ func main() {
 
 func loginHandler(authorizedHandler, unauthorizedHandler Handler) HandlerFunc {
 	return func(writer ResponseWriter, request *Request) {
-		_, ok := UserFromRequest(request)
-		if ok {
+		if _, ok := UserFromRequest(request); ok {
 			authorizedHandler.ServeGemini(writer, request)
 			return
 		}
@@ -142,6 +144,25 @@ func openSQL(fileName string) (db *sql.DB, cleanup func()) {
 	db, err := sql.Open("sqlite", fileName)
 	if err != nil {
 		log.Fatalf("couldn't open sql db: %s", err)
+	}
+
+	var rank int
+
+	query := goqu.New("sqlite", db).
+		From("flyway_schema_history").
+		Select(goqu.MAX("installed_rank"))
+
+	found, err := query.ScanVal(&rank)
+	if err != nil {
+		panic(err)
+	}
+
+	if !found {
+		panic("flyway schema version not found")
+	}
+
+	if rank != 8 {
+		panic("database out of version")
 	}
 
 	return db, func() {

@@ -1,10 +1,5 @@
 package model
 
-import (
-	"github.com/dustin/go-humanize"
-	"time"
-)
-
 type Certificate struct {
 	SHA256    string `db:"cert_sha256"`
 	ExpireAt  int64  `db:"expire_at"`
@@ -13,7 +8,7 @@ type Certificate struct {
 }
 
 func (c Certificate) GetCreatedAt() string {
-	return humanTime(c.CreatedAt)
+	return HumanTime(c.CreatedAt)
 }
 
 func (c Certificate) GetExpireAt() string {
@@ -21,7 +16,7 @@ func (c Certificate) GetExpireAt() string {
 		return "never"
 	}
 
-	return humanTime(c.ExpireAt)
+	return HumanTime(c.ExpireAt)
 }
 
 func (c Certificate) GetSHA256() string {
@@ -29,15 +24,5 @@ func (c Certificate) GetSHA256() string {
 }
 
 func (c Certificate) GetUpdatedAt() string {
-	return humanTime(c.UpdatedAt)
-}
-
-func humanTime(unixTime int64) string {
-	unix := time.Unix(unixTime, 0)
-
-	if time.Since(unix) > 48*time.Hour {
-		return unix.Format("02 Jan 2006 03:04PM")
-	}
-
-	return humanize.Time(unix)
+	return HumanTime(c.UpdatedAt)
 }

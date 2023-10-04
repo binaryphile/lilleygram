@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
@@ -12,6 +11,7 @@ import (
 	"github.com/binaryphile/lilleygram/handler"
 	"github.com/binaryphile/lilleygram/hash"
 	"github.com/binaryphile/lilleygram/helper"
+	"github.com/binaryphile/lilleygram/middleware"
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
@@ -33,24 +33,6 @@ func NewUnauthorizedController(repo sqlrepo.UserRepo) UnauthorizedController {
 	return c
 }
 
-func (c UnauthorizedController) Handler(routes ...map[string]Handler) *Mux {
-	var handlers map[string]Handler
-
-	if len(routes) > 0 {
-		handlers = routes[0]
-	} else {
-		handlers = c.Routes()
-	}
-
-	router := mux.NewMux()
-
-	for pattern, h := range handlers {
-		router.AddRoute(pattern, h)
-	}
-
-	return router
-}
-
 func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *Request) {
 	if request.URL.RawQuery == "" {
 		err := helper.InputSensitive(writer, "Password:")
@@ -63,16 +45,10 @@ func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *R
 
 	rawPassword := request.URL.RawQuery
 
-	route, ok := mux.GetMatchedRoute(request.Context)
-	if !ok {
-		helper.InternalServerError(writer, errors.New("no route match"))
-		return
-	}
-
-	strID, ok := route.PathVars["userid"]
+	strID, ok := middleware.PathVarFromRequest("userID", request)
 	if !ok {
 		gemini.BadRequest(writer, request)
-		log.Print("no userid")
+		log.Print("no userID")
 		return
 	}
 
@@ -201,10 +177,28 @@ func (c UnauthorizedController) CodeCheck(writer ResponseWriter, request *Reques
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/profile", userID))
+	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/username/set", userID))
 	if err != nil {
 		return
 	}
+}
+
+func (c UnauthorizedController) Handler(routes ...map[string]Handler) *Mux {
+	var handlers map[string]Handler
+
+	if len(routes) > 0 {
+		handlers = routes[0]
+	} else {
+		handlers = c.Routes()
+	}
+
+	router := mux.NewMux()
+
+	for pattern, h := range handlers {
+		router.AddRoute(pattern, h)
+	}
+
+	return router
 }
 
 func (c UnauthorizedController) Routes() map[string]Handler {
@@ -224,7 +218,7 @@ func (c UnauthorizedController) Routes() map[string]Handler {
 		"/register":                          handler.FileHandler(registerTemplates...),
 		"/register/code/check":               HandlerFunc(c.CodeCheck),
 		"/register/username/check":           HandlerFunc(c.UserNameCheck),
-		"/register/{userid}/certificate/add": HandlerFunc(c.CertificateAdd),
+		"/register/{userID}/certificate/add": HandlerFunc(c.CertificateAdd),
 	}
 }
 
@@ -243,10 +237,6 @@ func (c UnauthorizedController) UserNameCheck(writer ResponseWriter, request *Re
 
 	if request.URL.RawQuery == "" {
 		err = helper.InputPrompt(writer, "Provide your account's username:")
-		if err != nil {
-			return
-		}
-
 		return
 	}
 

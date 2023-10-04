@@ -29,13 +29,7 @@ func NewUserRepo(db *Database, now fnTime) UserRepo {
 }
 
 func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, err error) {
-	var db Inserter
-
-	if r.tx != nil {
-		db = r.db
-	} else {
-		db = r.tx
-	}
+	db := ifThenElse[Inserter](r.tx != nil, r.tx, r.db)
 
 	query := db.
 		Insert("users").
@@ -85,7 +79,7 @@ func (r UserRepo) CertificateListByUser(userID uint64) (_ []model.Certificate, e
 
 	err = query.ScanStructs(&certificates)
 	if err != nil {
-		panic(err)
+		return
 	}
 
 	return certificates, nil
@@ -257,6 +251,31 @@ func (r UserRepo) Begin() (_ UserRepo, err error) {
 		now: r.now,
 		tx:  tx,
 	}, nil
+}
+
+func (r UserRepo) UpdateAvatar(userID uint64, avatar string) error {
+	query := r.db.
+		Update("users").
+		Where(Ex{"id": userID}).
+		Set(
+			Record{"avatar": avatar, "updated_at": r.now()},
+		)
+
+	result, err := query.Executor().Exec()
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return errors.New("no rows affected")
+	}
+
+	return nil
 }
 
 func (r UserRepo) UpdateFirstName(userID uint64, firstName string) error {

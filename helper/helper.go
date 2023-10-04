@@ -9,12 +9,17 @@ import (
 )
 
 const (
-	namePattern = "^[a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ' -]*[a-zA-ZÀ-ÿ]$"
+	// Emoji regex pattern
+	avatarPattern = `^[\x{1F300}-\x{1F5FF}\x{1F600}-\x{1F64F}\x{1F680}-\x{1F6FF}\x{1F700}-\x{1F77F}\x{1F780}-\x{1F7FF}\x{1F800}-\x{1F8FF}\x{1F900}-\x{1F9FF}]$`
 
-	userNamePattern = "^[a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ'_-]*[a-zA-ZÀ-ÿ]$"
+	namePattern = `^[a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ' -]*[a-zA-ZÀ-ÿ]$`
+
+	userNamePattern = `^[a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ'_-]*[a-zA-ZÀ-ÿ]$`
 )
 
 var (
+	avatarRegex = regexp.MustCompile(avatarPattern)
+
 	nameRegex = regexp.MustCompile(namePattern)
 
 	userNameRegex = regexp.MustCompile(userNamePattern)
@@ -34,6 +39,12 @@ func InternalServerError(writer ResponseWriter, err error) {
 	}
 
 	log.Print(err)
+}
+
+func ValidateAvatar(avatar string) (_ string, ok bool) {
+	avatar = strings.TrimSpace(avatar)
+
+	return avatar, avatarRegex.MatchString(avatar)
 }
 
 func ValidateName(name string) (_ string, ok bool) {

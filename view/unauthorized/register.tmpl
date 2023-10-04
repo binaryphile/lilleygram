@@ -1,16 +1,26 @@
 {{template "base" . -}}
 {{define "main" -}}
-### Register
+# Register
+
+## Getting Started
+
+If you haven't visited the Getting Started page, start there rather than here.  It has information you'll need before you can use the site.
+
+=> /getting-started Getting started
+
+## Registration
 
 Registration is by invitation.
 
 => register/code/check Register with your registration code
 
+## Change certificates or add a new computer/device
+
+You can add a certificate to your existing account (e.g. you're coming from a new computer or device).
+
+Beforehand, from an existing logged-in device, you'll need to have set a password on your account.  You can do this by visiting the My Profile page from the top navigation menu.
+
+Then, from the new device, enable the certificate on this site.  In lagrange you can do this by visiting the root url of the site, gemini://g.lilleygram.com/, and clicking "Use on This page".  Then visit this link:
+
 => register/username/check Add a certificate to an existing account
-
-Note: Enable your new certificate before adding it.
-
-If you are a returning user on a new client, or have lost your existing
-certificate, you can add a certificate to your account so long as you
-have set a password.
 {{end -}}

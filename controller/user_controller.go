@@ -12,11 +12,10 @@ import (
 	. "github.com/binaryphile/lilleygram/must"
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
-	"github.com/dustin/go-humanize"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"text/template"
-	"time"
 )
 
 type (
@@ -35,8 +34,8 @@ func NewUserController(repo sqlrepo.UserRepo) UserController {
 
 	baseTemplates := []string{
 		"view/layout/base.tmpl",
-		"view/partial/nav.tmpl",
 		"view/partial/footer.tmpl",
+		"view/partial/nav.tmpl",
 	}
 
 	fileNames := map[string]string{
@@ -58,6 +57,42 @@ func NewUserController(repo sqlrepo.UserRepo) UserController {
 	}
 
 	return c
+}
+
+func (c UserController) AvatarSet(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
+	u, _ := middleware.UserFromRequest(request)
+
+	if request.URL.RawQuery == "" {
+		err = helper.InputPrompt(writer, "Enter your avatar emoji:")
+		return
+	}
+
+	query, err := url.QueryUnescape(request.URL.RawQuery)
+	if err != nil {
+		return
+	}
+
+	avatar, ok := helper.ValidateAvatar(query)
+	if !ok {
+		_, err = writer.Write([]byte(Heredoc(`
+			Avatar must be a single character and may be any emoji.
+			=> set Try again
+		`)))
+		if err != nil {
+			return
+		}
+	}
+
+	err = c.repo.UpdateAvatar(u.UserID, avatar)
+	if err != nil { // TODO: userName conflict
+		return
+	}
+
+	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
 }
 
 func (c UserController) CertificateList(writer ResponseWriter, request *Request) {
@@ -261,7 +296,7 @@ func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
 			write(" (*)")
 		}
 
-		write("\n\nand at least of each of:\n\n")
+		write("\n\nand at least one each of:\n\n")
 
 		write("* upper case")
 
@@ -287,7 +322,7 @@ func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
 			write(" (*)")
 		}
 
-		write("\n=> set Try Again\n")
+		write("\n\n=> set Try Again\n")
 
 		_, err = writer.Write(response.Bytes())
 		if err != nil {
@@ -308,13 +343,7 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	route, ok := mux.GetMatchedRoute(request.Context)
-	if !ok {
-		gemini.BadRequest(writer, request)
-		return
-	}
-
-	s, ok := route.PathVars["userID"]
+	s, ok := middleware.PathVarFromRequest("userID", request)
 	if !ok {
 		gemini.BadRequest(writer, request)
 		return
@@ -339,8 +368,8 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 	for i, certificate := range cs {
 		certificates[i] = helper.Certificate{
-			CreatedAt: humanTime(certificate.CreatedAt),
-			ExpireAt:  humanTime(certificate.ExpireAt),
+			CreatedAt: model.HumanTime(certificate.CreatedAt),
+			ExpireAt:  model.HumanTime(certificate.ExpireAt),
 		}
 	}
 
@@ -349,12 +378,12 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 		Certificates:  certificates,
 		FirstName:     p.FirstName,
 		LastName:      p.LastName,
-		LastSeen:      humanTime(p.LastSeen),
+		LastSeen:      model.HumanTime(p.LastSeen),
 		Me:            userID == u.UserID,
 		PasswordFound: p.Password.Valid,
 		UserID:        fmt.Sprintf("%d", userID),
 		UserName:      p.UserName,
-		CreatedAt:     humanTime(p.CreatedAt),
+		CreatedAt:     model.HumanTime(p.CreatedAt),
 	}
 
 	err = c.templates["profileGet"].Execute(writer, profile)
@@ -366,6 +395,7 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 func (c UserController) Routes() map[string]Handler {
 	return map[string]Handler{
 		"/users":                        HandlerFunc(c.List),
+		"/users/{userID}/avatar/set":    middleware.EyesOnly(HandlerFunc(c.AvatarSet)),
 		"/users/{userID}/certificates":  HandlerFunc(c.CertificateList),
 		"/users/{userID}/firstname/set": middleware.EyesOnly(HandlerFunc(c.FirstNameSet)),
 		"/users/{userID}/lastname/set":  middleware.EyesOnly(HandlerFunc(c.LastNameSet)),
@@ -382,20 +412,6 @@ func (c UserController) ServeGemini(writer ResponseWriter, request *Request) {
 	}
 
 	c.handler.ServeGemini(writer, request)
-}
-
-func humanTime(unixTime int64) string {
-	if unixTime == 0 {
-		return ""
-	}
-
-	unix := time.Unix(unixTime, 0)
-
-	if time.Since(unix) > 48*time.Hour {
-		return unix.Format("02 Jan 2006 03:04PM")
-	}
-
-	return humanize.Time(unix)
 }
 
 func (c UserController) UserNameSet(writer ResponseWriter, request *Request) {
@@ -417,5 +433,5 @@ func (c UserController) UserNameSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
+	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/avatar/set", u.UserID))
 }
