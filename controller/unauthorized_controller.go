@@ -12,9 +12,11 @@ import (
 	"github.com/binaryphile/lilleygram/hash"
 	"github.com/binaryphile/lilleygram/helper"
 	"github.com/binaryphile/lilleygram/middleware"
+	"github.com/binaryphile/lilleygram/opt"
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
+	"math/rand"
 	"strconv"
 )
 
@@ -34,18 +36,18 @@ func NewUnauthorizedController(repo sqlrepo.UserRepo) UnauthorizedController {
 }
 
 func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *Request) {
-	if request.URL.RawQuery == "" {
-		err := helper.InputSensitive(writer, "Password:")
-		if err != nil {
-			return
-		}
+	var err error
 
+	defer writeError(writer, err)
+
+	if request.URL.RawQuery == "" {
+		err = helper.InputSensitive(writer, "Password:")
 		return
 	}
 
 	rawPassword := request.URL.RawQuery
 
-	strID, ok := middleware.PathVarFromRequest("userID", request)
+	strID, ok := middleware.StrFromRequest(request, "userID")
 	if !ok {
 		gemini.BadRequest(writer, request)
 		log.Print("no userID")
@@ -70,7 +72,7 @@ func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *R
 		helper.InternalServerError(writer, err)
 	}
 
-	if hash.ComparePasswords(rawPassword, salt, password.Argon2) && found { // order matters for security
+	if hash.ComparePasswords(rawPassword, salt, password.Argon2) && found {
 		certID := request.Certificate.ID
 
 		if certID == "" {
@@ -110,7 +112,7 @@ func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *R
 
 	_, err = writer.Write([]byte(Heredoc(`
 		Either the username or password were incorrect.
-		=> /register/username/check Try Again
+		=> /register/username/check Try again
 	`)))
 	if err != nil {
 		helper.InternalServerError(writer, err)
@@ -147,8 +149,9 @@ func (c UnauthorizedController) CodeCheck(writer ResponseWriter, request *Reques
 
 	if certID == "" {
 		_, writeErr := writer.Write([]byte(Heredoc(`
-				Error: no certificate supplied.  Please enable your certificate and try again.
-				=> . Try Again
+				Error: no certificate supplied.  In order to register, you must go to the home page, enable your certificate, and then return to this page to register.
+				Note, if you do not enable the certificate on the home page rather than this page, registration will not work.
+				=> / Go Home
 			`)))
 		if writeErr != nil {
 			err = writeErr
@@ -164,10 +167,10 @@ func (c UnauthorizedController) CodeCheck(writer ResponseWriter, request *Reques
 	var userID uint64
 
 	err = c.repo.WithTx(
-		func(tx sqlrepo.UserRepo) (err error) {
-			userID, err = tx.Add("", "", "", "")
+		func(tx sqlrepo.UserRepo) error {
+			userID, err = tx.Add("", "", fmt.Sprintf("slug %d", rand.Int()), "")
 			if err != nil {
-				return
+				return err
 			}
 
 			return tx.CertificateAdd(certSHA256, 0, userID)
@@ -177,20 +180,11 @@ func (c UnauthorizedController) CodeCheck(writer ResponseWriter, request *Reques
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/username/set", userID))
-	if err != nil {
-		return
-	}
+	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/username/set", userID))
 }
 
 func (c UnauthorizedController) Handler(routes ...map[string]Handler) *Mux {
-	var handlers map[string]Handler
-
-	if len(routes) > 0 {
-		handlers = routes[0]
-	} else {
-		handlers = c.Routes()
-	}
+	handlers := opt.OfFirst(routes).Or(c.Routes())
 
 	router := mux.NewMux()
 
@@ -250,14 +244,14 @@ func (c UnauthorizedController) UserNameCheck(writer ResponseWriter, request *Re
 	if !found {
 		_, err = writer.Write([]byte(Heredoc(`
 			That user was not found.  If you feel this result was in error, click the link below to try again.
-			=> /register/username/check Resubmit helperUser
+			=> /register/username/check Try again
 		`)))
 		if err != nil {
 			return
 		}
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/register/%d/certificate/add", user.ID))
+	err = helper.Redirect(writer, fmt.Sprintf("/register/%d/certificate/add", user.ID))
 }
 
 func writeError(writer ResponseWriter, err error) {

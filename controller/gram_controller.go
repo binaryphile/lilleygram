@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/helper"
@@ -10,6 +11,7 @@ import (
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/slice"
 	"github.com/binaryphile/lilleygram/sqlrepo"
+	"log"
 	"net/url"
 	"path/filepath"
 	"text/template"
@@ -70,7 +72,7 @@ func (c GramController) Add(writer ResponseWriter, request *Request) {
 	`)))
 }
 
-func (c GramController) Get(writer ResponseWriter, request *Request) {
+func (c GramController) List(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -107,13 +109,35 @@ func (c GramController) Handler(routes ...map[string]Handler) *Mux {
 
 func (c GramController) Routes() map[string]Handler {
 	return map[string]Handler{
-		"/":          HandlerFunc(c.Get),
-		"/grams/add": HandlerFunc(c.Add),
+		"/":                   HandlerFunc(c.List),
+		"/grams/add":          HandlerFunc(c.Add),
+		"/grams/{id}/sparkle": HandlerFunc(c.Sparkle),
 	}
 }
 
 func (c GramController) ServeGemini(writer ResponseWriter, request *Request) {
-	c.handler = opt.OfPointer(c.handler).Or(c.Handler())
+	if c.handler == nil {
+		c.handler = c.Handler()
+	}
 
 	c.handler.ServeGemini(writer, request)
+}
+
+func (c GramController) Sparkle(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
+	user, _ := middleware.UserFromRequest(request)
+
+	gramID, ok := middleware.Uint64FromRequest(request, "id")
+	if !ok {
+		gemini.BadRequest(writer, request)
+		log.Print("no ID")
+		return
+	}
+
+	_, err = c.repo.Sparkle(gramID, user.UserID)
+
+	err = helper.Redirect(writer, "/")
 }

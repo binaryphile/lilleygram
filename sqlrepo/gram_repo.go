@@ -13,8 +13,8 @@ type (
 		tx  *TxDatabase
 	}
 
-	Fromer interface {
-		From(...any) *SelectDataset
+	Selector interface {
+		Select(...any) *SelectDataset
 	}
 )
 
@@ -48,23 +48,38 @@ func (r GramRepo) Add(userID uint64, gram string) (_ uint64, err error) {
 }
 
 func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
-	db := ifThenElse[Fromer](r.tx != nil, r.tx, r.db)
+	db := ifThenElse[Selector](r.tx != nil, r.tx, r.db)
 
 	grams := make([]model.Gram, 0, 25)
 
 	query := db.
-		From("grams").
-		Join(
-			T("follows"),
-			On(Ex{"follows.follow_id": I("grams.user_id")}),
+		Select(
+			"g.id",
+			"u.avatar",
+			"g.expire_at",
+			"g.gram",
+			COUNT("s.id").As("sparkles"),
+			"g.user_id",
+			"u.user_name",
+			"g.created_at",
+			"g.updated_at",
 		).
+		From(T("grams").As("g")).
 		Join(
-			T("users"),
-			On(Ex{"grams.user_id": I("users.id")}),
+			T("users").As("u"),
+			On(Ex{"g.user_id": I("u.id")}),
+		).
+		LeftJoin(
+			T("sparkles").As("s"),
+			On(Ex{"g.id": I("s.gram_id")}),
 		).
 		Where(
-			Ex{"follows.user_id": userID},
-		)
+			Ex{"g.user_id": db.Select("followed_id").
+				From("follows").
+				Where(Ex{"follower_id": userID})},
+		).
+		GroupBy("g.id").
+		Order(I("g.updated_at").Desc())
 
 	err = query.ScanStructs(&grams)
 	if err != nil {
@@ -74,33 +89,26 @@ func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 	return grams, nil
 }
 
-func (r GramRepo) Commit() (_ error) {
-	if r.tx != nil {
-		return r.tx.Commit()
-	}
+func (r GramRepo) Sparkle(gramID, userID uint64) (_ uint64, err error) {
+	db := ifThenElse[Inserter](r.tx != nil, r.tx, r.db)
 
-	return
-}
+	query := db.
+		Insert("sparkles").
+		Rows(
+			Record{"gram_id": gramID, "user_id": userID},
+		)
 
-func (r GramRepo) Rollback() (_ error) {
-	if r.tx != nil {
-		return r.tx.Rollback()
-	}
-
-	return
-}
-
-func (r GramRepo) Begin() (_ GramRepo, err error) {
-	tx, err := r.db.Begin()
+	result, err := query.Executor().Exec()
 	if err != nil {
 		return
 	}
 
-	return GramRepo{
-		db:  r.db,
-		now: r.now,
-		tx:  tx,
-	}, nil
+	sparkleID, err := result.LastInsertId()
+	if err != nil {
+		return
+	}
+
+	return uint64(sparkleID), nil
 }
 
 // WithTx starts a new transaction and executes it in Wrap method

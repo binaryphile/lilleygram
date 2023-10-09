@@ -161,7 +161,7 @@ func openSQL(fileName string) (db *sql.DB, cleanup func()) {
 		panic("flyway schema version not found")
 	}
 
-	if rank != 8 {
+	if rank != 9 {
 		panic("database out of version")
 	}
 

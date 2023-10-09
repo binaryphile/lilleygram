@@ -36,7 +36,7 @@ func EyesOnly(handler Handler) Handler {
 	return HandlerFunc(func(writer ResponseWriter, request *Request) {
 		user, _ := UserFromRequest(request)
 
-		strID, _ := PathVarFromRequest("userID", request)
+		strID, _ := StrFromRequest(request, "userID")
 
 		intID, err := strconv.Atoi(strID)
 		if err != nil {
@@ -52,6 +52,34 @@ func EyesOnly(handler Handler) Handler {
 
 		handler.ServeGemini(writer, request)
 	})
+}
+
+func Uint64FromRequest(request *Request, key string) (_ uint64, ok bool) {
+	strVar, ok := StrFromRequest(request, key)
+	if !ok {
+		return
+	}
+
+	intVar, err := strconv.Atoi(strVar)
+	if err != nil {
+		return
+	}
+
+	return uint64(intVar), true
+}
+
+func StrFromRequest(request *Request, key string) (_ string, ok bool) {
+	route, ok := mux.GetMatchedRoute(request.Context)
+	if !ok {
+		return
+	}
+
+	strVar, ok := route.PathVars[key]
+	if !ok {
+		return
+	}
+
+	return strVar, true
 }
 
 func UserFromRequest(r *Request) (_ helper.User, ok bool) {
@@ -113,18 +141,4 @@ func WithRequiredAuthentication(authorizer FnAuthorize) Middleware {
 			handler.ServeGemini(writer, request)
 		})
 	}
-}
-
-func PathVarFromRequest(key string, request *Request) (_ string, ok bool) {
-	route, ok := mux.GetMatchedRoute(request.Context)
-	if !ok {
-		return
-	}
-
-	s, ok := route.PathVars[key]
-	if !ok {
-		return
-	}
-
-	return s, true
 }

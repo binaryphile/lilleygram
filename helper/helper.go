@@ -41,6 +41,10 @@ func InternalServerError(writer ResponseWriter, err error) {
 	log.Print(err)
 }
 
+func Redirect(writer ResponseWriter, location string) error {
+	return writer.SetHeader(gemini.CodeRedirect, location)
+}
+
 func ValidateAvatar(avatar string) (_ string, ok bool) {
 	avatar = strings.TrimSpace(avatar)
 

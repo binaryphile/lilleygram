@@ -1,10 +1,11 @@
-CREATE TABLE grams
+CREATE TABLE sparkles
 (
     id         INTEGER NOT NULL PRIMARY KEY,
     expire_at  INTEGER NOT NULL DEFAULT 0,
-    gram       TEXT    NOT NULL COLLATE NOCASE,
+    gram_id    INTEGER NOT NULL,
+    user_id    INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    user_id    INTEGER NOT NULL,
+    FOREIGN KEY (gram_id) REFERENCES grams (id),
     FOREIGN KEY (user_id) REFERENCES users (id)
 );

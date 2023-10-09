@@ -10,6 +10,7 @@ import (
 	"github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/model"
 	. "github.com/binaryphile/lilleygram/must"
+	"github.com/binaryphile/lilleygram/opt"
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"net/url"
@@ -92,7 +93,7 @@ func (c UserController) AvatarSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
+	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
 }
 
 func (c UserController) CertificateList(writer ResponseWriter, request *Request) {
@@ -128,7 +129,7 @@ func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
 
 	user, _ := middleware.UserFromRequest(request)
 
-	strID, _ := middleware.PathVarFromRequest("userID", request)
+	strID, _ := middleware.StrFromRequest(request, "userID")
 
 	intID, err := strconv.Atoi(strID)
 	if err != nil {
@@ -163,17 +164,11 @@ func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/lastname/set", pathUserID))
+	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/lastname/set", pathUserID))
 }
 
 func (c UserController) Handler(routes ...map[string]Handler) *Mux {
-	var handlers map[string]Handler
-
-	if len(routes) > 0 {
-		handlers = routes[0]
-	} else {
-		handlers = c.Routes()
-	}
+	handlers := opt.OfFirst(routes).Or(c.Routes())
 
 	router := mux.NewMux()
 
@@ -212,25 +207,7 @@ func (c UserController) LastNameSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/profile", u.UserID))
-}
-
-func (c UserController) List(writer ResponseWriter, request *Request) {
-	var err error
-
-	defer writeError(writer, err)
-
-	user, _ := middleware.UserFromRequest(request)
-
-	u, found, err := c.repo.Get(user.UserID)
-	if err != nil || !found {
-		return
-	}
-
-	_, err = writer.Write([]byte(fmt.Sprintf("%d - %s - %s - %s", u.ID, u.FirstName, u.LastName, u.UserName)))
-	if err != nil {
-		return
-	}
+	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/profile", u.UserID))
 }
 
 func (c UserController) PasswordGet(writer ResponseWriter, request *Request) {
@@ -335,7 +312,7 @@ func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/profile", user.UserID))
+	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/profile", user.UserID))
 }
 
 func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
@@ -343,7 +320,7 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	s, ok := middleware.PathVarFromRequest("userID", request)
+	s, ok := middleware.StrFromRequest(request, "userID")
 	if !ok {
 		gemini.BadRequest(writer, request)
 		return
@@ -394,7 +371,6 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 func (c UserController) Routes() map[string]Handler {
 	return map[string]Handler{
-		"/users":                        HandlerFunc(c.List),
 		"/users/{userID}/avatar/set":    middleware.EyesOnly(HandlerFunc(c.AvatarSet)),
 		"/users/{userID}/certificates":  HandlerFunc(c.CertificateList),
 		"/users/{userID}/firstname/set": middleware.EyesOnly(HandlerFunc(c.FirstNameSet)),
@@ -419,19 +395,28 @@ func (c UserController) UserNameSet(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	u, _ := middleware.UserFromRequest(request)
+	user, _ := middleware.UserFromRequest(request)
 
 	if request.URL.RawQuery == "" {
 		err = helper.InputPrompt(writer, "Choose your (permanent) username:")
 		return
 	}
 
-	userName := request.URL.RawQuery
+	userName, ok := helper.ValidateUserName(request.URL.RawQuery)
+	if !ok {
+		_, err = writer.Write([]byte(Heredoc(`
+			Username must be between 5 and 50 characters with no spaces or emojis.
+			=> set Try again
+		`)))
+		if err != nil {
+			return
+		}
+	}
 
-	err = c.repo.UpdateUserName(u.UserID, userName)
+	err = c.repo.UpdateUserName(user.UserID, userName)
 	if err != nil { // TODO: userName conflict
 		return
 	}
 
-	err = writer.SetHeader(gemini.CodeRedirect, fmt.Sprintf("/users/%d/avatar/set", u.UserID))
+	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/avatar/set", user.UserID))
 }
