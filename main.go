@@ -36,7 +36,7 @@ func main() {
 
 	certAuthorizer := newCertAuthorizer(userRepo)
 
-	gramHandler := controller.NewGramController(sqlrepo.NewGramRepo(db, unixNow))
+	gramController := controller.NewGramController(sqlrepo.NewGramRepo(db, unixNow))
 
 	authorizedBaseTemplates := []string{
 		"view/layout/base.tmpl",
@@ -48,8 +48,8 @@ func main() {
 	// the logged-in user experience is here.
 	authorizedController := ExtendHandler(
 		mountHandlers(map[string]Handler{
-			"/":                gramHandler,
-			"/grams":           gramHandler,
+			"/":                gramController,
+			"/grams":           gramController,
 			"/getting-started": handler.FileHandler(append([]string{"view/unauthorized/getting-started.tmpl"}, authorizedBaseTemplates...)...),
 			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authorizedBaseTemplates...)...),
 			"/users":           controller.NewUserController(userRepo),

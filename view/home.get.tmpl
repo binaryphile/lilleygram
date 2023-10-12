@@ -4,7 +4,7 @@
 {{range .Grams -}}
 ## {{.Avatar}} {{.UserName}} -- {{.UpdatedAt}}
 {{.Gram}}
-=> /grams/{{.ID}}/sparkle ✨Sparkle!
+=> /grams/{{.ID}}/sparkle ✨Sparkle!{{if .Sparkles}} ({{.Sparkles}}){{end}}
 {{end -}}
 {{else -}}
 There's nothing to see here yet!
