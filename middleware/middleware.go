@@ -1,17 +1,21 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/helper"
 	"log"
+	"regexp"
 	"strconv"
+	"strings"
 )
 
 const (
-	keyUser contextKey = "user"
+	keyUser      contextKey = "user"
+	keyDeployEnv contextKey = "deploy_env"
 )
 
 type (
@@ -21,6 +25,28 @@ type (
 
 	contextKey string
 )
+
+var (
+	linkExp = regexp.MustCompile(`^=> `)
+)
+
+func CertUserFromRequest(r *Request) (_ helper.User, ok bool) {
+	user, ok := r.Context.Value(keyUser).(helper.User)
+	if !ok {
+		return
+	}
+
+	return user, ok
+}
+
+func DeployEnvFromRequest(r *Request) (_ string, ok bool) {
+	deployEnv, ok := r.Context.Value(keyDeployEnv).(string)
+	if !ok {
+		return
+	}
+
+	return deployEnv, ok
+}
 
 func ExtendHandler(handler Handler, extensions ...Middleware) Handler {
 	extended := handler
@@ -34,18 +60,11 @@ func ExtendHandler(handler Handler, extensions ...Middleware) Handler {
 
 func EyesOnly(handler Handler) Handler {
 	return HandlerFunc(func(writer ResponseWriter, request *Request) {
-		user, _ := UserFromRequest(request)
+		user, _ := CertUserFromRequest(request)
 
-		strID, _ := StrFromRequest(request, "userID")
+		userID, _ := Uint64FromRequest(request, "id")
 
-		intID, err := strconv.Atoi(strID)
-		if err != nil {
-			return
-		}
-
-		pathUserID := uint64(intID)
-
-		if user.UserID != pathUserID {
+		if user.UserID != userID {
 			gemini.NotFound(writer, request)
 			return
 		}
@@ -82,10 +101,34 @@ func StrFromRequest(request *Request, key string) (_ string, ok bool) {
 	return strVar, true
 }
 
-func UserFromRequest(r *Request) (_ helper.User, ok bool) {
-	user, ok := r.Context.Value(keyUser).(helper.User)
+func WithLocalDeployEnv(handler Handler) Handler {
+	return HandlerFunc(func(w ResponseWriter, request *Request) {
+		path := request.URL.Path
 
-	return user, ok
+		if !strings.HasPrefix(path, "/local/") {
+			handler.ServeGemini(w, request)
+			return
+		}
+
+		request.URL.Path = "/" + strings.TrimPrefix(path, "/local/")
+
+		body := &bytes.Buffer{}
+
+		newWriter := gemini.NewWriter(body)
+
+		handler.ServeGemini(newWriter, request)
+
+		data := body.Bytes()
+
+		modifiedData := linkExp.ReplaceAllFunc(data, func(match []byte) []byte {
+			return append([]byte("=> "), []byte("local/")...)
+		})
+
+		_, err := w.Write(modifiedData)
+		if err != nil {
+			log.Print(err)
+		}
+	})
 }
 
 func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {
@@ -109,7 +152,7 @@ func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {
 func WithRequiredAuthentication(authorizer FnAuthorize) Middleware {
 	return func(handler Handler) Handler {
 		return HandlerFunc(func(writer ResponseWriter, request *Request) {
-			_, ok := UserFromRequest(request)
+			_, ok := CertUserFromRequest(request)
 			if ok {
 				handler.ServeGemini(writer, request)
 				return

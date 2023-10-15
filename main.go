@@ -38,35 +38,44 @@ func main() {
 
 	gramController := controller.NewGramController(sqlrepo.NewGramRepo(db, unixNow))
 
-	authorizedBaseTemplates := []string{
+	authenticatedBaseTemplates := []string{
 		"view/layout/base.tmpl",
 		"view/partial/footer.tmpl",
 		"view/partial/nav.tmpl",
 	}
 
-	// the authorizedController operates behind required authentication.
+	// authenticatedHandler operates behind required authentication.
 	// the logged-in user experience is here.
-	authorizedController := ExtendHandler(
+	authenticatedHandler := ExtendHandler(
 		mountHandlers(map[string]Handler{
 			"/":                gramController,
 			"/grams":           gramController,
-			"/getting-started": handler.FileHandler(append([]string{"view/unauthorized/getting-started.tmpl"}, authorizedBaseTemplates...)...),
-			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authorizedBaseTemplates...)...),
+			"/getting-started": handler.FileHandler(append([]string{"view/unauthenticated/getting-started.tmpl"}, authenticatedBaseTemplates...)...),
+			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authenticatedBaseTemplates...)...),
 			"/users":           controller.NewUserController(userRepo),
 		}),
 		WithRequiredAuthentication(certAuthorizer),
 	)
 
-	// the unauthorizedController operates behind optional authentication.
-	// the authorizedController also relies on the optional authentication
+	// unauthenticatedController operates behind optional authentication.
+	// the authenticatedHandler also relies on the optional authentication
 	// to identify the certificate, so the two controllers are combined
 	// before being extended with optional authentication.
-	unauthorizedController := controller.NewUnauthorizedController(userRepo)
+	unauthenticatedController := controller.NewUnauthenticatedController(userRepo)
 
 	rootHandler := ExtendHandler(
-		loginHandler(authorizedController, unauthorizedController),
+		loginHandler(authenticatedHandler, unauthenticatedController),
 		WithOptionalAuthentication(certAuthorizer),
 	)
+
+	deployEnv := opt.Getenv("DEPLOY_ENV").Or("production")
+
+	if deployEnv == "local" {
+		rootHandler = ExtendHandler(
+			rootHandler,
+			WithLocalDeployEnv,
+		)
+	}
 
 	// set up the domain handler
 
@@ -90,14 +99,14 @@ func main() {
 	}
 }
 
-func loginHandler(authorizedHandler, unauthorizedHandler Handler) HandlerFunc {
+func loginHandler(authenticatedHandler, unauthenticatedHandler Handler) HandlerFunc {
 	return func(writer ResponseWriter, request *Request) {
-		if _, ok := UserFromRequest(request); ok {
-			authorizedHandler.ServeGemini(writer, request)
+		if _, ok := CertUserFromRequest(request); ok {
+			authenticatedHandler.ServeGemini(writer, request)
 			return
 		}
 
-		unauthorizedHandler.ServeGemini(writer, request)
+		unauthenticatedHandler.ServeGemini(writer, request)
 	}
 }
 

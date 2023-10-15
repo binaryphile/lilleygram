@@ -13,6 +13,7 @@ import (
 	"github.com/binaryphile/lilleygram/opt"
 	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
+	"log"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -40,9 +41,8 @@ func NewUserController(repo sqlrepo.UserRepo) UserController {
 	}
 
 	fileNames := map[string]string{
-		"certificateList": "view/certificate.list.tmpl",
-		"passwordGet":     "view/password.get.tmpl",
-		"profileGet":      "view/profile.get.tmpl",
+		"passwordGet": "view/password.get.tmpl",
+		"profileGet":  "view/profile.get.tmpl",
 	}
 
 	funcs := template.FuncMap{
@@ -65,7 +65,7 @@ func (c UserController) AvatarSet(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	u, _ := middleware.UserFromRequest(request)
+	u, _ := middleware.CertUserFromRequest(request)
 
 	if request.URL.RawQuery == "" {
 		err = helper.InputPrompt(writer, "Enter your avatar emoji:")
@@ -96,38 +96,12 @@ func (c UserController) AvatarSet(writer ResponseWriter, request *Request) {
 	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
 }
 
-func (c UserController) CertificateList(writer ResponseWriter, request *Request) {
-	var err error
-
-	defer writeError(writer, err)
-
-	user, _ := middleware.UserFromRequest(request)
-
-	certificates, err := c.repo.CertificateListByUser(user.UserID)
-	if err != nil {
-		return
-	}
-
-	data := struct {
-		Certificates []model.Certificate
-		User         helper.User
-	}{
-		Certificates: certificates,
-		User:         user,
-	}
-
-	err = c.templates["certificateList"].Execute(writer, data)
-	if err != nil {
-		return
-	}
-}
-
 func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
 
-	user, _ := middleware.UserFromRequest(request)
+	user, _ := middleware.CertUserFromRequest(request)
 
 	strID, _ := middleware.StrFromRequest(request, "userID")
 
@@ -184,7 +158,7 @@ func (c UserController) LastNameSet(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	u, _ := middleware.UserFromRequest(request)
+	u, _ := middleware.CertUserFromRequest(request)
 
 	if request.URL.RawQuery == "" {
 		err = helper.InputPrompt(writer, "Enter your last name:")
@@ -215,7 +189,7 @@ func (c UserController) PasswordGet(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	user, _ := middleware.UserFromRequest(request)
+	user, _ := middleware.CertUserFromRequest(request)
 
 	password, _, err := c.repo.PasswordGet(user.UserID)
 	if err != nil {
@@ -246,7 +220,7 @@ func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	user, _ := middleware.UserFromRequest(request)
+	user, _ := middleware.CertUserFromRequest(request)
 
 	password := request.URL.RawQuery
 
@@ -299,7 +273,7 @@ func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
 			write(" (*)")
 		}
 
-		write("\n\n=> set Try Again\n")
+		write("\n\n=> set Try again\n")
 
 		_, err = writer.Write(response.Bytes())
 		if err != nil {
@@ -320,21 +294,14 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	s, ok := middleware.StrFromRequest(request, "userID")
+	userID, ok := middleware.Uint64FromRequest(request, "id")
 	if !ok {
 		gemini.BadRequest(writer, request)
+		log.Print("no user id")
 		return
 	}
 
-	i, err := strconv.Atoi(s)
-	if err != nil {
-		gemini.BadRequest(writer, request)
-		return
-	}
-
-	userID := uint64(i)
-
-	u, _ := middleware.UserFromRequest(request)
+	u, _ := middleware.CertUserFromRequest(request)
 
 	p, cs, found, err := c.repo.ProfileGet(userID)
 	if err != nil || !found {
@@ -345,14 +312,15 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 	for i, certificate := range cs {
 		certificates[i] = helper.Certificate{
-			CreatedAt: model.HumanTime(certificate.CreatedAt),
-			ExpireAt:  model.HumanTime(certificate.ExpireAt),
+			CreatedAt: model.LongHumanTime(certificate.CreatedAt),
+			ExpireAt:  model.LongHumanTime(certificate.ExpireAt),
 		}
 	}
 
 	profile := helper.Profile{
 		Avatar:        p.Avatar,
 		Certificates:  certificates,
+		CreatedAt:     model.LongHumanTime(p.CreatedAt),
 		FirstName:     p.FirstName,
 		LastName:      p.LastName,
 		LastSeen:      model.HumanTime(p.LastSeen),
@@ -360,7 +328,6 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 		PasswordFound: p.Password.Valid,
 		UserID:        fmt.Sprintf("%d", userID),
 		UserName:      p.UserName,
-		CreatedAt:     model.HumanTime(p.CreatedAt),
 	}
 
 	err = c.templates["profileGet"].Execute(writer, profile)
@@ -371,14 +338,13 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 func (c UserController) Routes() map[string]Handler {
 	return map[string]Handler{
-		"/users/{userID}/avatar/set":    middleware.EyesOnly(HandlerFunc(c.AvatarSet)),
-		"/users/{userID}/certificates":  HandlerFunc(c.CertificateList),
-		"/users/{userID}/firstname/set": middleware.EyesOnly(HandlerFunc(c.FirstNameSet)),
-		"/users/{userID}/lastname/set":  middleware.EyesOnly(HandlerFunc(c.LastNameSet)),
-		"/users/{userID}/password":      HandlerFunc(c.PasswordGet),
-		"/users/{userID}/password/set":  middleware.EyesOnly(HandlerFunc(c.PasswordSet)),
-		"/users/{userID}/profile":       HandlerFunc(c.ProfileGet),
-		"/users/{userID}/username/set":  middleware.EyesOnly(HandlerFunc(c.UserNameSet)),
+		"/users/{id}/avatar/set":    middleware.EyesOnly(HandlerFunc(c.AvatarSet)),
+		"/users/{id}/firstname/set": middleware.EyesOnly(HandlerFunc(c.FirstNameSet)),
+		"/users/{id}/lastname/set":  middleware.EyesOnly(HandlerFunc(c.LastNameSet)),
+		"/users/{id}/password":      HandlerFunc(c.PasswordGet),
+		"/users/{id}/password/set":  middleware.EyesOnly(HandlerFunc(c.PasswordSet)),
+		"/users/{id}/profile":       HandlerFunc(c.ProfileGet),
+		"/users/{id}/username/set":  middleware.EyesOnly(HandlerFunc(c.UserNameSet)),
 	}
 }
 
@@ -395,7 +361,7 @@ func (c UserController) UserNameSet(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	user, _ := middleware.UserFromRequest(request)
+	user, _ := middleware.CertUserFromRequest(request)
 
 	if request.URL.RawQuery == "" {
 		err = helper.InputPrompt(writer, "Choose your (permanent) username:")

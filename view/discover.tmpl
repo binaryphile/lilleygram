@@ -1,10 +1,18 @@
 {{template "base" . -}}
 {{define "main" -}}
+## Timeline
+
 {{if .Grams -}}
 {{range .Grams -}}
-## {{.Avatar}} {{.UserName}} -- {{.UpdatedAt}}
+### {{.UserName}} {{.Avatar}} {{.UpdatedAt}}
 {{.Gram}}
-=> /grams/{{.ID}}/sparkle ✨Sparkle!{{if .Sparkles}} ({{.Sparkles}}){{end}}
+---
+=> /grams/{{.ID}}/sparkle ✨ Sparkle{{if .Sparkles}} ({{.Sparkles}}){{end}}
+
+
+
+{{else -}}
+---
 {{end -}}
 {{else -}}
 There's nothing to see here yet!

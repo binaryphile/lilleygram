@@ -88,7 +88,7 @@ func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 			"g.user_id",
 			"u.user_name",
 			"u.avatar",
-			"g.gram",
+			"g.body",
 			COUNT(I("s.id")).As("sparkles"),
 			"g.expire_at",
 			"g.created_at",

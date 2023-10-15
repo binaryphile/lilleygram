@@ -18,7 +18,7 @@ func GramFromModel(m model.Gram) Gram {
 	return Gram{
 		ID:        fmt.Sprintf("%d", m.ID),
 		Avatar:    m.Avatar,
-		Gram:      m.Gram,
+		Gram:      m.Body,
 		Sparkles:  m.Sparkles,
 		UserName:  m.UserName,
 		UpdatedAt: model.HumanTime(m.UpdatedAt),

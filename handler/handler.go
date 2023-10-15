@@ -15,7 +15,7 @@ func FileHandler(fileNames ...string) Handler {
 	}
 
 	return HandlerFunc(func(writer ResponseWriter, request *Request) {
-		user, _ := UserFromRequest(request)
+		user, _ := CertUserFromRequest(request)
 
 		err := tmpl.Execute(writer, user)
 		if err != nil {

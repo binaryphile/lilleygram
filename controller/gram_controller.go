@@ -8,7 +8,6 @@ import (
 	"github.com/binaryphile/lilleygram/middleware"
 	. "github.com/binaryphile/lilleygram/must"
 	"github.com/binaryphile/lilleygram/opt"
-	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/slice"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
@@ -40,7 +39,7 @@ func NewGramController(repo sqlrepo.GramRepo) GramController {
 		},
 	}
 
-	fileName := "view/home.get.tmpl"
+	fileName := "view/timeline.tmpl"
 	templates := append([]string{fileName}, baseTemplates...)
 	c.getTemplate = Must(template.New(filepath.Base(fileName)).Funcs(funcs).ParseFiles(templates...))
 
@@ -57,7 +56,7 @@ func (c GramController) Add(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	user, _ := middleware.UserFromRequest(request)
+	user, _ := middleware.CertUserFromRequest(request)
 
 	gram, err := url.QueryUnescape(request.URL.RawQuery)
 
@@ -66,10 +65,7 @@ func (c GramController) Add(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	_, err = writer.Write([]byte(Heredoc(`
-		Your gram has been posted!
-		=> / Go Home
-	`)))
+	err = helper.Redirect(writer, "/")
 }
 
 func (c GramController) List(writer ResponseWriter, request *Request) {
@@ -77,7 +73,7 @@ func (c GramController) List(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	user, _ := middleware.UserFromRequest(request)
+	user, _ := middleware.CertUserFromRequest(request)
 
 	grams, err := c.repo.List(user.UserID)
 	if err != nil {
@@ -128,7 +124,7 @@ func (c GramController) Sparkle(writer ResponseWriter, request *Request) {
 
 	defer writeError(writer, err)
 
-	user, _ := middleware.UserFromRequest(request)
+	user, _ := middleware.CertUserFromRequest(request)
 
 	gramID, ok := middleware.Uint64FromRequest(request, "id")
 	if !ok {

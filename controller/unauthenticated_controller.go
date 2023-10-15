@@ -17,25 +17,24 @@ import (
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
 	"math/rand"
-	"strconv"
 )
 
 type (
-	UnauthorizedController struct {
+	UnauthenticatedController struct {
 		handler *Mux
 		repo    sqlrepo.UserRepo
 	}
 )
 
-func NewUnauthorizedController(repo sqlrepo.UserRepo) UnauthorizedController {
-	c := UnauthorizedController{
+func NewUnauthenticatedController(repo sqlrepo.UserRepo) UnauthenticatedController {
+	c := UnauthenticatedController{
 		repo: repo,
 	}
 
 	return c
 }
 
-func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *Request) {
+func (c UnauthenticatedController) CertificateAdd(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -47,21 +46,14 @@ func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *R
 
 	rawPassword := request.URL.RawQuery
 
-	strID, ok := middleware.StrFromRequest(request, "userID")
+	userID, ok := middleware.Uint64FromRequest(request, "userID")
 	if !ok {
 		gemini.BadRequest(writer, request)
-		log.Print("no userID")
+		log.Print("no user id")
 		return
 	}
 
-	userID, err := strconv.Atoi(strID)
-	if err != nil {
-		gemini.BadRequest(writer, request)
-		log.Print(err)
-		return
-	}
-
-	password, found, err := c.repo.PasswordGet(uint64(userID))
+	password, found, err := c.repo.PasswordGet(userID)
 	if err != nil {
 		helper.InternalServerError(writer, err)
 		return
@@ -120,7 +112,7 @@ func (c UnauthorizedController) CertificateAdd(writer ResponseWriter, request *R
 	}
 }
 
-func (c UnauthorizedController) CodeCheck(writer ResponseWriter, request *Request) {
+func (c UnauthenticatedController) CodeCheck(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -183,7 +175,7 @@ func (c UnauthorizedController) CodeCheck(writer ResponseWriter, request *Reques
 	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/username/set", userID))
 }
 
-func (c UnauthorizedController) Handler(routes ...map[string]Handler) *Mux {
+func (c UnauthenticatedController) Handler(routes ...map[string]Handler) *Mux {
 	handlers := opt.OfFirst(routes).Or(c.Routes())
 
 	router := mux.NewMux()
@@ -195,19 +187,19 @@ func (c UnauthorizedController) Handler(routes ...map[string]Handler) *Mux {
 	return router
 }
 
-func (c UnauthorizedController) Routes() map[string]Handler {
+func (c UnauthenticatedController) Routes() map[string]Handler {
 	baseTemplates := []string{
-		"view/unauthorized/partial/nav.tmpl",
+		"view/unauthenticated/partial/nav.tmpl",
 		"view/layout/base.tmpl",
 		"view/partial/footer.tmpl",
 	}
 
-	getTemplates := append([]string{"view/unauthorized/home.get.tmpl"}, baseTemplates...)
-	gettingStartedTemplates := append([]string{"view/unauthorized/getting-started.tmpl"}, baseTemplates...)
-	registerTemplates := append([]string{"view/unauthorized/register.tmpl"}, baseTemplates...)
+	gettingStartedTemplates := append([]string{"view/unauthenticated/getting-started.tmpl"}, baseTemplates...)
+	homeTemplates := append([]string{"view/unauthenticated/home.tmpl"}, baseTemplates...)
+	registerTemplates := append([]string{"view/unauthenticated/register.tmpl"}, baseTemplates...)
 
 	return map[string]Handler{
-		"/":                                  handler.FileHandler(getTemplates...),
+		"/":                                  handler.FileHandler(homeTemplates...),
 		"/getting-started":                   handler.FileHandler(gettingStartedTemplates...),
 		"/register":                          handler.FileHandler(registerTemplates...),
 		"/register/code/check":               HandlerFunc(c.CodeCheck),
@@ -216,7 +208,7 @@ func (c UnauthorizedController) Routes() map[string]Handler {
 	}
 }
 
-func (c UnauthorizedController) ServeGemini(writer ResponseWriter, request *Request) {
+func (c UnauthenticatedController) ServeGemini(writer ResponseWriter, request *Request) {
 	if c.handler == nil {
 		c.handler = c.Handler()
 	}
@@ -224,7 +216,7 @@ func (c UnauthorizedController) ServeGemini(writer ResponseWriter, request *Requ
 	c.handler.ServeGemini(writer, request)
 }
 
-func (c UnauthorizedController) UserNameCheck(writer ResponseWriter, request *Request) {
+func (c UnauthenticatedController) UserNameCheck(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
