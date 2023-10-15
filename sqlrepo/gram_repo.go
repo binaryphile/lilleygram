@@ -61,7 +61,12 @@ func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 	gramsQuery := db.
 		From("grams").
 		Select("id").
-		Where(Ex{"user_id": followedUsers})
+		Where(
+			Or(
+				Ex{"user_id": followedUsers},
+				Ex{"user_id": userID},
+			),
+		)
 
 	sparklesQuery := db.
 		From("sparkles").
