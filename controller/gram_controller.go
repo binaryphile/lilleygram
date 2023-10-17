@@ -17,31 +17,33 @@ import (
 )
 
 type GramController struct {
-	getTemplate *Template
-	handler     *Mux
-	repo        sqlrepo.GramRepo
+	baseTemplateNames []string
+	funcs             template.FuncMap
+	listTemplate      *Template
+	handler           *Mux
+	repo              sqlrepo.GramRepo
 }
 
 func NewGramController(repo sqlrepo.GramRepo) GramController {
 	c := GramController{
+		baseTemplateNames: []string{
+			"view/layout/base.tmpl",
+			"view/partial/nav.tmpl",
+			"view/partial/footer.tmpl",
+		},
+		funcs: template.FuncMap{
+			"incr": func(index int) int {
+				return index + 1
+			},
+		},
 		repo: repo,
 	}
 
-	baseTemplates := []string{
-		"view/layout/base.tmpl",
-		"view/partial/nav.tmpl",
-		"view/partial/footer.tmpl",
-	}
-
-	funcs := template.FuncMap{
-		"incr": func(index int) int {
-			return index + 1
-		},
-	}
-
 	fileName := "view/timeline.tmpl"
-	templates := append([]string{fileName}, baseTemplates...)
-	c.getTemplate = Must(template.New(filepath.Base(fileName)).Funcs(funcs).ParseFiles(templates...))
+
+	templates := append([]string{fileName}, c.baseTemplateNames...)
+
+	c.listTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 
 	return c
 }
@@ -88,7 +90,15 @@ func (c GramController) List(writer ResponseWriter, request *Request) {
 		Grams: slice.Map(helper.GramFromModel, grams),
 	}
 
-	err = c.getTemplate.Execute(writer, data)
+	if deployEnv, ok := middleware.DeployEnvFromRequest(request); ok && deployEnv == "local" {
+		fileName := "view/timeline.tmpl"
+
+		templates := append([]string{fileName}, c.baseTemplateNames...)
+
+		c.listTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
+	}
+
+	err = c.listTemplate.Execute(writer, data)
 }
 
 func (c GramController) Handler(routes ...map[string]Handler) *Mux {

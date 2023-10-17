@@ -21,6 +21,24 @@ func (v Value[T]) Or(ifNot T) T {
 	return ifNot
 }
 
+func (v Value[T]) OrZeroAndDo(fn func()) (_ T) {
+	if v.ok {
+		return v.v
+	}
+
+	fn()
+
+	return
+}
+
+func Apply[T, R any](fn func(T) R, v Value[T]) (_ Value[R]) {
+	if v.ok {
+		return Of(fn(v.v), true)
+	}
+
+	return
+}
+
 func Getenv(key string) Value[string] {
 	return OfNonZero(os.Getenv(key))
 }
@@ -31,6 +49,12 @@ func Of[T any](t T, ok bool) (_ Value[T]) {
 	}
 
 	return
+}
+
+func OfAssert[R, T any](t T) Value[R] {
+	v, ok := any(t).(R)
+
+	return Of(v, ok)
 }
 
 func OfFirst[T any](values []T) (_ Value[T]) {

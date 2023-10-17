@@ -22,22 +22,28 @@ import (
 
 type (
 	UserController struct {
-		handler   *Mux
-		repo      sqlrepo.UserRepo
-		templates map[string]*Template
+		baseTemplateNames []string
+		funcs             template.FuncMap
+		handler           *Mux
+		repo              sqlrepo.UserRepo
+		templates         map[string]*Template
 	}
 )
 
 func NewUserController(repo sqlrepo.UserRepo) UserController {
 	c := UserController{
+		baseTemplateNames: []string{
+			"view/layout/base.tmpl",
+			"view/partial/footer.tmpl",
+			"view/partial/nav.tmpl",
+		},
+		funcs: template.FuncMap{
+			"incr": func(index int) int {
+				return index + 1
+			},
+		},
 		repo:      repo,
 		templates: make(map[string]*Template),
-	}
-
-	baseTemplates := []string{
-		"view/layout/base.tmpl",
-		"view/partial/footer.tmpl",
-		"view/partial/nav.tmpl",
 	}
 
 	fileNames := map[string]string{
@@ -45,16 +51,10 @@ func NewUserController(repo sqlrepo.UserRepo) UserController {
 		"profileGet":  "view/profile.get.tmpl",
 	}
 
-	funcs := template.FuncMap{
-		"incr": func(index int) int {
-			return index + 1
-		},
-	}
-
 	for method, fileName := range fileNames {
-		templates := append([]string{fileName}, baseTemplates...)
+		templates := append([]string{fileName}, c.baseTemplateNames...)
 
-		c.templates[method] = Must(template.New(filepath.Base(fileName)).Funcs(funcs).ParseFiles(templates...))
+		c.templates[method] = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 	}
 
 	return c

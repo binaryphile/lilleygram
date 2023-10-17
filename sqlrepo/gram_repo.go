@@ -25,13 +25,13 @@ func NewGramRepo(db *Database, now fnTime) GramRepo {
 	}
 }
 
-func (r GramRepo) Add(userID uint64, gram string) (_ uint64, err error) {
+func (r GramRepo) Add(userID uint64, body string) (_ uint64, err error) {
 	db := ifThenElse[Inserter](r.tx != nil, r.tx, r.db)
 
 	query := db.
 		Insert("grams").
 		Rows(
-			Record{"user_id": userID, "gram": gram},
+			Record{"user_id": userID, "body": body},
 		)
 
 	result, err := query.Executor().Exec()

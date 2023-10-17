@@ -14,12 +14,21 @@ func FileHandler(fileNames ...string) Handler {
 		log.Panic(err)
 	}
 
-	return HandlerFunc(func(writer ResponseWriter, request *Request) {
+	return HandlerFunc(func(w ResponseWriter, request *Request) {
 		user, _ := CertUserFromRequest(request)
 
-		err := tmpl.Execute(writer, user)
+		if deployEnv, ok := DeployEnvFromRequest(request); ok && deployEnv == "local" {
+			var err error
+
+			tmpl, err = template.ParseFiles(fileNames...)
+			if err != nil {
+				log.Panic(err)
+			}
+		}
+
+		err := tmpl.Execute(w, user)
 		if err != nil {
-			helper.InternalServerError(writer, err)
+			helper.InternalServerError(w, err)
 			return
 		}
 	})
