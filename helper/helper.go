@@ -48,6 +48,12 @@ func Redirect(writer ResponseWriter, location string) error {
 func ValidateAvatar(avatar string) (_ string, ok bool) {
 	avatar = strings.TrimSpace(avatar)
 
+	if len(avatar) == 0 {
+		return
+	}
+
+	avatar = string(avatar[0])
+
 	return avatar, avatarRegex.MatchString(avatar)
 }
 
