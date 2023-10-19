@@ -8,6 +8,7 @@ import (
 	"github.com/a-h/gemini"
 	"github.com/binaryphile/lilleygram/controller"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/gmni"
 	"github.com/binaryphile/lilleygram/handler"
 	"github.com/binaryphile/lilleygram/helper"
 	. "github.com/binaryphile/lilleygram/middleware"
@@ -119,7 +120,7 @@ func mountHandlers(handlers map[string]Handler) HandlerFunc {
 		if h, ok := handlers["/"+first]; ok {
 			h.ServeGemini(writer, request)
 		} else {
-			gemini.NotFound(writer, request)
+			gmni.NotFound(writer, request)
 		}
 	}
 }

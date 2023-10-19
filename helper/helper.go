@@ -1,12 +1,31 @@
 package helper
 
 import (
-	"github.com/a-h/gemini"
-	. "github.com/binaryphile/lilleygram/controller/shortcuts"
-	"log"
+	"fmt"
+	"github.com/binaryphile/lilleygram/model"
 	"regexp"
 	"strings"
 )
+
+type Gram struct {
+	ID        string
+	Avatar    string
+	Gram      string
+	Sparkles  int
+	UserName  string
+	UpdatedAt string
+}
+
+func GramFromModel(m model.Gram) Gram {
+	return Gram{
+		ID:        fmt.Sprintf("%d", m.ID),
+		Avatar:    m.Avatar,
+		Gram:      m.Body,
+		Sparkles:  m.Sparkles,
+		UserName:  m.UserName,
+		UpdatedAt: model.HumanTime(m.UpdatedAt),
+	}
+}
 
 const (
 	// Emoji regex pattern
@@ -24,26 +43,6 @@ var (
 
 	userNameRegex = regexp.MustCompile(userNamePattern)
 )
-
-func InputPrompt(writer ResponseWriter, message string) error {
-	return writer.SetHeader(gemini.CodeInput, message)
-}
-
-func InputSensitive(writer ResponseWriter, message string) error {
-	return writer.SetHeader(gemini.CodeInputSensitive, message)
-}
-
-func InternalServerError(writer ResponseWriter, err error) {
-	if err := writer.SetHeader(gemini.CodePermanentFailure, "Internal Server Error"); err != nil {
-		log.Print(err)
-	}
-
-	log.Print(err)
-}
-
-func Redirect(writer ResponseWriter, location string) error {
-	return writer.SetHeader(gemini.CodeRedirect, location)
-}
 
 func ValidateAvatar(avatar string) (_ string, ok bool) {
 	avatar = strings.TrimSpace(avatar)

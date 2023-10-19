@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/a-h/gemini"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/gmni"
 	"github.com/binaryphile/lilleygram/helper"
 	"log"
 )
@@ -40,7 +41,7 @@ func EyesOnly(handler Handler) Handler {
 		userID, _ := Uint64FromRequest(request, "id")
 
 		if user.UserID != userID {
-			gemini.NotFound(writer, request)
+			gmni.NotFound(writer, request)
 			return
 		}
 

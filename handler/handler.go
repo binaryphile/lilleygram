@@ -2,7 +2,7 @@ package handler
 
 import (
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
-	"github.com/binaryphile/lilleygram/helper"
+	"github.com/binaryphile/lilleygram/gmni"
 	. "github.com/binaryphile/lilleygram/middleware"
 	"log"
 	"text/template"
@@ -28,7 +28,7 @@ func FileHandler(fileNames ...string) Handler {
 
 		err := tmpl.Execute(w, user)
 		if err != nil {
-			helper.InternalServerError(w, err)
+			gmni.InternalServerError(w, err)
 			return
 		}
 	})

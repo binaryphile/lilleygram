@@ -6,6 +6,7 @@ import (
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/gmni"
 	"github.com/binaryphile/lilleygram/helper"
 	"github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/model"
@@ -68,7 +69,7 @@ func (c UserController) AvatarSet(writer ResponseWriter, request *Request) {
 	u, _ := middleware.CertUserFromRequest(request)
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputPrompt(writer, "Enter your avatar emoji:")
+		err = gmni.InputPrompt(writer, "Enter your avatar emoji:")
 		return
 	}
 
@@ -93,7 +94,7 @@ func (c UserController) AvatarSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
+	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
 }
 
 func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
@@ -113,12 +114,12 @@ func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
 	pathUserID := uint64(intID)
 
 	if user.UserID != pathUserID {
-		gemini.NotFound(writer, request)
+		gmni.NotFound(writer, request)
 		return
 	}
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputPrompt(writer, "Enter your first name:")
+		err = gmni.InputPrompt(writer, "Enter your first name:")
 		return
 	}
 
@@ -138,7 +139,7 @@ func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/lastname/set", pathUserID))
+	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/lastname/set", pathUserID))
 }
 
 func (c UserController) Handler(routes ...map[string]Handler) *Mux {
@@ -161,7 +162,7 @@ func (c UserController) LastNameSet(writer ResponseWriter, request *Request) {
 	u, _ := middleware.CertUserFromRequest(request)
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputPrompt(writer, "Enter your last name:")
+		err = gmni.InputPrompt(writer, "Enter your last name:")
 		return
 	}
 
@@ -181,7 +182,7 @@ func (c UserController) LastNameSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/profile", u.UserID))
+	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/profile", u.UserID))
 }
 
 func (c UserController) PasswordGet(writer ResponseWriter, request *Request) {
@@ -216,7 +217,7 @@ func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
 	defer writeError(writer, err)
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputSensitive(writer, "New Password:\n(at least 8 characters, at least one upper case, lower case, digit and special character)")
+		err = gmni.InputSensitive(writer, "New Password:\n(at least 8 characters, at least one upper case, lower case, digit and special character)")
 		return
 	}
 
@@ -286,7 +287,7 @@ func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/profile", user.UserID))
+	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/profile", user.UserID))
 }
 
 func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
@@ -323,7 +324,7 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 		CreatedAt:     model.LongHumanTime(p.CreatedAt),
 		FirstName:     p.FirstName,
 		LastName:      p.LastName,
-		LastSeen:      model.HumanTime(p.LastSeen),
+		LastSeen:      model.LongHumanTime(p.LastSeen),
 		Me:            userID == u.UserID,
 		PasswordFound: p.Password.Valid,
 		UserID:        fmt.Sprintf("%d", userID),
@@ -364,7 +365,7 @@ func (c UserController) UserNameSet(writer ResponseWriter, request *Request) {
 	user, _ := middleware.CertUserFromRequest(request)
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputPrompt(writer, "Choose your (permanent) username:")
+		err = gmni.InputPrompt(writer, "Choose your (permanent) username:")
 		return
 	}
 
@@ -384,5 +385,5 @@ func (c UserController) UserNameSet(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/avatar/set", user.UserID))
+	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/avatar/set", user.UserID))
 }

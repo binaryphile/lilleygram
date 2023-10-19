@@ -8,9 +8,9 @@ import (
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/gmni"
 	"github.com/binaryphile/lilleygram/handler"
 	"github.com/binaryphile/lilleygram/hash"
-	"github.com/binaryphile/lilleygram/helper"
 	"github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/opt"
 	. "github.com/binaryphile/lilleygram/shortcuts"
@@ -40,7 +40,7 @@ func (c UnauthenticatedController) CertificateAdd(writer ResponseWriter, request
 	defer writeError(writer, err)
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputSensitive(writer, "Password:")
+		err = gmni.InputSensitive(writer, "Password:")
 		return
 	}
 
@@ -55,13 +55,13 @@ func (c UnauthenticatedController) CertificateAdd(writer ResponseWriter, request
 
 	password, found, err := c.repo.PasswordGet(userID)
 	if err != nil {
-		helper.InternalServerError(writer, err)
+		gmni.InternalServerError(writer, err)
 		return
 	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(password.Salt)
 	if err != nil {
-		helper.InternalServerError(writer, err)
+		gmni.InternalServerError(writer, err)
 	}
 
 	if hash.ComparePasswords(rawPassword, salt, password.Argon2) && found {
@@ -73,7 +73,7 @@ func (c UnauthenticatedController) CertificateAdd(writer ResponseWriter, request
 				=> . Try Again
 			`)))
 			if err != nil {
-				helper.InternalServerError(writer, err)
+				gmni.InternalServerError(writer, err)
 				return
 			}
 
@@ -86,7 +86,7 @@ func (c UnauthenticatedController) CertificateAdd(writer ResponseWriter, request
 
 		err = c.repo.CertificateAdd(certSHA256, 0, uint64(userID))
 		if err != nil {
-			helper.InternalServerError(writer, err)
+			gmni.InternalServerError(writer, err)
 			return
 		}
 
@@ -95,7 +95,7 @@ func (c UnauthenticatedController) CertificateAdd(writer ResponseWriter, request
 			=> / Return home
 		`)))
 		if err != nil {
-			helper.InternalServerError(writer, err)
+			gmni.InternalServerError(writer, err)
 			return
 		}
 
@@ -107,7 +107,7 @@ func (c UnauthenticatedController) CertificateAdd(writer ResponseWriter, request
 		=> /register/username/check Try again
 	`)))
 	if err != nil {
-		helper.InternalServerError(writer, err)
+		gmni.InternalServerError(writer, err)
 		return
 	}
 }
@@ -118,7 +118,7 @@ func (c UnauthenticatedController) CodeCheck(writer ResponseWriter, request *Req
 	defer writeError(writer, err)
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputSensitive(writer, "Registration code:")
+		err = gmni.InputSensitive(writer, "Registration code:")
 		return
 	}
 
@@ -172,7 +172,7 @@ func (c UnauthenticatedController) CodeCheck(writer ResponseWriter, request *Req
 		return
 	}
 
-	err = helper.Redirect(writer, fmt.Sprintf("/users/%d/username/set", userID))
+	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/username/set", userID))
 }
 
 func (c UnauthenticatedController) Handler(routes ...map[string]Handler) *Mux {
@@ -222,7 +222,7 @@ func (c UnauthenticatedController) UserNameCheck(writer ResponseWriter, request 
 	defer writeError(writer, err)
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputPrompt(writer, "Provide your account's username:")
+		err = gmni.InputPrompt(writer, "Provide your account's username:")
 		return
 	}
 
@@ -243,11 +243,11 @@ func (c UnauthenticatedController) UserNameCheck(writer ResponseWriter, request 
 		}
 	}
 
-	err = helper.Redirect(writer, fmt.Sprintf("/register/%d/certificate/add", user.ID))
+	err = gmni.Redirect(writer, fmt.Sprintf("/register/%d/certificate/add", user.ID))
 }
 
 func writeError(writer ResponseWriter, err error) {
 	if err != nil {
-		helper.InternalServerError(writer, err)
+		gmni.InternalServerError(writer, err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/gmni"
 	"github.com/binaryphile/lilleygram/helper"
 	"github.com/binaryphile/lilleygram/middleware"
 	. "github.com/binaryphile/lilleygram/must"
@@ -54,7 +55,7 @@ func (c GramController) Add(writer ResponseWriter, request *Request) {
 	defer writeError(writer, err)
 
 	if request.URL.RawQuery == "" {
-		err = helper.InputPrompt(writer, "Compose your gram of up to 500 characters:")
+		err = gmni.InputPrompt(writer, "Compose your gram of up to 500 characters:")
 		return
 	}
 
@@ -67,7 +68,7 @@ func (c GramController) Add(writer ResponseWriter, request *Request) {
 		return
 	}
 
-	err = helper.Redirect(writer, "/")
+	err = gmni.Redirect(writer, "/")
 }
 
 func (c GramController) List(writer ResponseWriter, request *Request) {
@@ -145,5 +146,5 @@ func (c GramController) Sparkle(writer ResponseWriter, request *Request) {
 
 	_, err = c.repo.Sparkle(gramID, user.UserID)
 
-	err = helper.Redirect(writer, "/")
+	err = gmni.Redirect(writer, "/")
 }
