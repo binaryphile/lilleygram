@@ -3,34 +3,16 @@ package middleware
 import (
 	"context"
 	"github.com/a-h/gemini"
-	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/helper"
 	"log"
-	"strconv"
-)
-
-const (
-	keyUser      contextKey = "user"
-	keyDeployEnv contextKey = "deploy_env"
 )
 
 type (
 	FnAuthorize = func(certID, certKey string) (helper.User, bool)
 
 	Middleware = func(Handler) Handler
-
-	contextKey string
 )
-
-func CertUserFromRequest(r *Request) (_ helper.User, ok bool) {
-	user, ok := r.Context.Value(keyUser).(helper.User)
-	if !ok {
-		return
-	}
-
-	return user, ok
-}
 
 func DeployEnvFromRequest(r *Request) (_ string, ok bool) {
 	deployEnv, ok := r.Context.Value(keyDeployEnv).(string)
@@ -64,34 +46,6 @@ func EyesOnly(handler Handler) Handler {
 
 		handler.ServeGemini(writer, request)
 	})
-}
-
-func StrFromRequest(request *Request, key string) (_ string, ok bool) {
-	route, ok := mux.GetMatchedRoute(request.Context)
-	if !ok {
-		return
-	}
-
-	strVar, ok := route.PathVars[key]
-	if !ok {
-		return
-	}
-
-	return strVar, true
-}
-
-func Uint64FromRequest(request *Request, key string) (_ uint64, ok bool) {
-	strVar, ok := StrFromRequest(request, key)
-	if !ok {
-		return
-	}
-
-	intVar, err := strconv.Atoi(strVar)
-	if err != nil {
-		return
-	}
-
-	return uint64(intVar), true
 }
 
 func WithLocalDeployEnv(handler Handler) Handler {
