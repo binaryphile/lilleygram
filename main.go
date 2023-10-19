@@ -8,6 +8,8 @@ import (
 	"github.com/a-h/gemini"
 	"github.com/binaryphile/lilleygram/controller"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	"github.com/binaryphile/lilleygram/handler"
+	"github.com/binaryphile/lilleygram/helper"
 	. "github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
@@ -28,34 +30,65 @@ func main() {
 
 	db := goqu.New("sqlite3", sqlDB)
 
-	// create controllers
+	// create controllers/routers
 
 	userRepo := sqlrepo.NewUserRepo(db, unixNow)
 
-	userController := controller.NewUserController(userRepo)
-
 	certAuthorizer := newCertAuthorizer(userRepo)
 
-	userRouter := ExtendRouter(userController.Router(), WithAuthentication(certAuthorizer))
+	gramController := controller.NewGramController(sqlrepo.NewGramRepo(db, unixNow))
 
-	homeController := controller.NewHomeController()
+	authenticatedBaseTemplates := []string{
+		"view/layout/base.tmpl",
+		"view/partial/footer.tmpl",
+		"view/partial/nav.tmpl",
+	}
 
-	homeRouter := ExtendRouter(homeController.Router(), WithOptionalAuthentication(certAuthorizer))
+	// authenticatedHandler operates behind required authentication.
+	// the logged-in user experience is here.
+	authenticatedHandler := ExtendHandler(
+		mountHandlers(map[string]Handler{
+			"/":                gramController,
+			"/grams":           gramController,
+			"/getting-started": handler.FileHandler(append([]string{"view/unauthenticated/getting-started.tmpl"}, authenticatedBaseTemplates...)...),
+			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authenticatedBaseTemplates...)...),
+			"/users":           controller.NewUserController(userRepo),
+		}),
+		WithRequiredAuthentication(certAuthorizer),
+	)
+
+	// unauthenticatedController operates behind optional authentication.
+	// the authenticatedHandler also relies on the optional authentication
+	// to identify the certificate, so the two controllers are combined
+	// before being extended with optional authentication.
+	unauthenticatedController := controller.NewUnauthenticatedController(userRepo)
+
+	rootHandler := ExtendHandler(
+		loginHandler(authenticatedHandler, unauthenticatedController),
+		WithOptionalAuthentication(certAuthorizer),
+	)
+
+	deployEnv := opt.Getenv("DEPLOY_ENV").Or("production")
+
+	if deployEnv == "local" {
+		rootHandler = ExtendHandler(
+			rootHandler,
+			WithLocalDeployEnv,
+		)
+	}
 
 	// set up the domain handler
 
-	root := mountRouters(map[string]Handler{
-		"/":      homeRouter,
-		"/users": userRouter,
-	})
+	certificate := tlsmust.LoadX509KeyPair(
+		opt.Getenv("LGRAM_X509_CERT_FILE").Or("server.crt"),
+		opt.Getenv("LGRAM_X509_KEY_FILE").Or("server.key"),
+	)
 
-	certificate := tlsmust.LoadX509KeyPair(osmust.Getenv("LGRAM_X509_CERT_FILE"), osmust.Getenv("LGRAM_X509_KEY_FILE"))
-
-	address := opt.Getenv("LGRAM_SERVER_ADDRESS").Or("g.lilleygram.com:1965")
+	address := opt.Getenv("LGRAM_SERVER_ADDRESS").Or("g.lilleygram.com")
 
 	host, port, _ := strings.Cut(address, ":")
 
-	domainHandler := gemini.NewDomainHandler(host, certificate, root)
+	domainHandler := gemini.NewDomainHandler(host, certificate, rootHandler)
 
 	port = ":" + opt.OfNonZero(port).Or("1965")
 
@@ -66,22 +99,25 @@ func main() {
 	}
 }
 
-func mountRouters(handlers map[string]Handler) HandlerFunc {
-	routes := make(map[string]Handler)
+func loginHandler(authenticatedHandler, unauthenticatedHandler Handler) HandlerFunc {
+	return func(writer ResponseWriter, request *Request) {
+		if _, ok := CertUserFromRequest(request); ok {
+			authenticatedHandler.ServeGemini(writer, request)
+			return
+		}
 
-	for pattern, handler := range handlers {
-		pattern = strings.TrimPrefix(pattern, "/")
-
-		routes[pattern] = handler
+		unauthenticatedHandler.ServeGemini(writer, request)
 	}
+}
 
+func mountHandlers(handlers map[string]Handler) HandlerFunc {
 	return func(writer ResponseWriter, request *Request) {
 		path := strings.TrimPrefix(request.URL.Path, "/")
 
 		first, _, _ := strings.Cut(path, "/")
 
-		if handler, ok := routes[first]; ok {
-			handler.ServeGemini(writer, request)
+		if h, ok := handlers["/"+first]; ok {
+			h.ServeGemini(writer, request)
 		} else {
 			gemini.NotFound(writer, request)
 		}
@@ -89,11 +125,7 @@ func mountRouters(handlers map[string]Handler) HandlerFunc {
 }
 
 func newCertAuthorizer(repo sqlrepo.UserRepo) FnAuthorize {
-	return func(certID, _ string) (_ struct {
-		Avatar   string
-		ID       uint64
-		UserName string
-	}, ok bool) {
+	return func(certID, _ string) (_ helper.User, ok bool) {
 		hash := sha256.Sum256([]byte(certID))
 
 		certSHA256 := hex.EncodeToString(hash[:])
@@ -104,13 +136,14 @@ func newCertAuthorizer(repo sqlrepo.UserRepo) FnAuthorize {
 			return
 		}
 
-		return struct {
-			Avatar   string
-			ID       uint64
-			UserName string
-		}{
+		err = repo.UpdateSeen(user.ID)
+		if err != nil {
+			log.Print(err)
+		}
+
+		return helper.User{
 			Avatar:   user.Avatar,
-			ID:       user.ID,
+			UserID:   user.ID,
 			UserName: user.UserName,
 		}, true
 	}
@@ -120,6 +153,25 @@ func openSQL(fileName string) (db *sql.DB, cleanup func()) {
 	db, err := sql.Open("sqlite", fileName)
 	if err != nil {
 		log.Fatalf("couldn't open sql db: %s", err)
+	}
+
+	var rank int
+
+	query := goqu.New("sqlite", db).
+		From("flyway_schema_history").
+		Select(goqu.MAX("installed_rank"))
+
+	found, err := query.ScanVal(&rank)
+	if err != nil {
+		panic(err)
+	}
+
+	if !found {
+		panic("flyway schema version not found")
+	}
+
+	if rank != 9 {
+		panic("database out of version")
 	}
 
 	return db, func() {

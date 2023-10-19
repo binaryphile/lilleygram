@@ -1,19 +1,14 @@
 package model
 
-import (
-	"github.com/argoproj/pkg/humanize"
-	"time"
-)
-
 type Certificate struct {
-	CreatedAt int64  `db:"created_at"`
-	ExpireAt  int64  `db:"expire_at"`
 	SHA256    string `db:"cert_sha256"`
+	ExpireAt  int64  `db:"expire_at"`
+	CreatedAt int64  `db:"created_at"`
 	UpdatedAt int64  `db:"updated_at"`
 }
 
 func (c Certificate) GetCreatedAt() string {
-	return humanTime(c.CreatedAt)
+	return HumanTime(c.CreatedAt)
 }
 
 func (c Certificate) GetExpireAt() string {
@@ -21,7 +16,7 @@ func (c Certificate) GetExpireAt() string {
 		return "never"
 	}
 
-	return humanTime(c.ExpireAt)
+	return HumanTime(c.ExpireAt)
 }
 
 func (c Certificate) GetSHA256() string {
@@ -29,15 +24,5 @@ func (c Certificate) GetSHA256() string {
 }
 
 func (c Certificate) GetUpdatedAt() string {
-	return humanTime(c.UpdatedAt)
-}
-
-func humanTime(unixTime int64) string {
-	unix := time.Unix(unixTime, 0)
-
-	if time.Since(unix) > 168*time.Hour {
-		return unix.Format("02 Jan 2006 15:04")
-	}
-
-	return humanize.RelativeDuration(time.Now(), unix)
+	return HumanTime(c.UpdatedAt)
 }

@@ -1,23 +1,23 @@
 module github.com/binaryphile/lilleygram
 
-go 1.21.1
+go 1.21.2
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/a-h/gemini v0.0.69
-	github.com/argoproj/pkg v0.13.6
 	github.com/doug-martin/goqu/v9 v9.18.0
+	github.com/dustin/go-humanize v1.0.1
 	golang.org/x/crypto v0.0.0-20201216223049-8b5274cf687f
 	modernc.org/sqlite v1.25.0
 )
 
 require (
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/stretchr/testify v1.7.2 // indirect
 	golang.org/x/mod v0.3.0 // indirect
 	golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab // indirect
 	golang.org/x/tools v0.0.0-20201124115921-2c860bdd6e78 // indirect

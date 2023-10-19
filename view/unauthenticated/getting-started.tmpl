@@ -1,0 +1,68 @@
+{{template "base" . -}}
+{{define "main" -}}
+
+# Getting Started on LilleyGram
+
+## What is LilleyGram?
+
+LilleyGram is a small social website that is our own friendly circle of families.  It is a safe place for our kids and their parents to send simple, public messages to each other.
+
+## What do I need in order to use LilleyGram?
+
+You will need:
+
+* An invitation code -- LilleyGram is invite-only for now
+* A gemini browser -- software much like a web browser, only simpler
+* A user identification certificate -- it's less scary than it sounds, it's a file created by your client that can be used for authentication on LilleyGram
+* a sense of curiosity and adventure!
+
+### Invitation Code
+
+If you are looking at this page, it's very likely because I brought you here while trying to convince you to help out with this project.  If so, congratulations!  You know where to get a registration code, I'm right next to you.
+
+Otherwise, you're out of luck for the moment.  Sorry!
+
+### Gemini Browser
+
+As for a gemini browser, there are a few available for each platform (Windows, Mac, etc.).  I recommend lagrange because it has releases for multiple platforms and it's fairly familiar-looking and easy to use.
+
+The following links are to web sites (http) and may not open in all gemini browsers.
+
+=> https://git.skyjake.fi/gemini/lagrange/releases lagrange windowed gemini client
+
+If you're the technologically adventurous type, you can try the command line terminal-oriented amfora, which I also test with.  It's a bit less friendly, but a charming way to browse.
+
+=> https://github.com/makew0rld/amfora/releases amfora terminal gemini client
+
+### Creating a certificate
+
+When you come to the LilleyGram capsule (this site), you'll need to enable a client certificate in order to get registered.
+
+In order to enable a certificate, you'll first need to have a certificate.  I'll walk through how to do this on lagrange, since it is a good client that makes certificates easy.
+
+Run lagrange, then select Identity > New Identity... from the top menu, or type Ctrl-Shift-N.  The "New Identity" dialog appears.
+
+You only need to fill out two pieces of information in the dialog.  In the "Valid until:" field, enter a year in the future such as 2050.
+
+In the "Common name:" field, enter a name for this certificate.  Either your real name or desired username is fine.
+
+Click "Create Identity" and the left-hand drawer will unfold, showing the certificate.  If you lose sight of this drawer, it is toggled by the button connected to the forward/backward buttons right above the drawer.  The drawer is tabbed, with certificates showing under the tab with the user icon.
+
+### Enabling the Certificate
+
+You enable a certificate for a site by visiting the root url of the site (such as gemini://g.lilleygram.com) and then right-clicking the certificate and choosing "Use on This Page".
+
+Once the certificate is enabled, you can visit the registration page to get the certificate registered.  From then on, the site will know who you are.
+
+=> /register Register here
+
+### Logging off and on
+
+If you want to log off, simply right-click and "Stop Using on This Page" or "Stop Using Everywhere".
+
+To log back on, enable the certificate again.  Be sure you do it at the root of the site though, so all pages get sent the certificate.
+
+### The rest of it
+
+As for curiosity and adventure, you'll supply those interacting with each other, so enjoy the ride.
+{{end -}}

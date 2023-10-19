@@ -5,5 +5,5 @@ CREATE TABLE passwords
     salt        TEXT    NOT NULL UNIQUE,
     created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    FOREIGN KEY (user_id) REFERENCES users (user_id)
+    FOREIGN KEY (user_id) REFERENCES users (id)
 );
