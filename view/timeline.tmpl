@@ -4,10 +4,14 @@
 
 {{if .Grams -}}
 {{range .Grams -}}
-### {{.UserName}} {{.Avatar}} {{.UpdatedAt}}
-{{.Gram}}
+### {{.AuthorUserName}} {{.AuthorAvatar}} {{.UpdatedAt}}
+{{.Body}}
+
 ---
 => /grams/{{.ID}}/sparkle ✨ Sparkle{{if .Sparkles}} ({{.Sparkles}}){{end}}
+{{if not .FollowingAuthor and not .Me -}}
+=> /users/{{.AuthorID}}/follow 🔊 Follow
+{{end -}}
 
 
 

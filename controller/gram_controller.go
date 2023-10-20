@@ -88,7 +88,7 @@ func (c GramController) List(writer ResponseWriter, request *Request) {
 		Grams []helper.Gram
 	}{
 		User:  user,
-		Grams: slice.Map(helper.GramFromModel, grams),
+		Grams: slice.Map(helper.GramFromModel(user.UserID), grams),
 	}
 
 	if deployEnv, ok := middleware.DeployEnvFromRequest(request); ok && deployEnv == "local" {

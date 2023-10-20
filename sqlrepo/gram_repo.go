@@ -52,7 +52,18 @@ func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 
 	grams := make([]model.Gram, 0, 25)
 
-	// Define the subquery for users you follow
+	// This will return 1 row (of 1) if the gram's user is followed by the current user, 0 otherwise
+	isFollowing := db.
+		From("follows").
+		Select(V(1).As("following")).
+		Where(
+			And(
+				Ex{"follower_id": userID},
+				Ex{"followed_id": I("g.user_id")},
+			),
+		).
+		Limit(1)
+
 	followedUsers := db.
 		From("follows").
 		Select("followed_id").
@@ -93,6 +104,7 @@ func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 			"g.expire_at",
 			"g.created_at",
 			"g.updated_at",
+			COALESCE(isFollowing, 0).As("following_author"),
 		).
 		GroupBy(I("cg.id")).
 		Order(I("g.created_at").Desc())

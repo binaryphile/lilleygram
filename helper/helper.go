@@ -1,29 +1,24 @@
 package helper
 
 import (
-	"fmt"
 	"github.com/binaryphile/lilleygram/model"
 	"regexp"
 	"strings"
 )
 
 type Gram struct {
-	ID        string
-	Avatar    string
-	Gram      string
-	Sparkles  int
-	UserName  string
+	model.Gram
+	Me        bool
 	UpdatedAt string
 }
 
-func GramFromModel(m model.Gram) Gram {
-	return Gram{
-		ID:        fmt.Sprintf("%d", m.ID),
-		Avatar:    m.Avatar,
-		Gram:      m.Body,
-		Sparkles:  m.Sparkles,
-		UserName:  m.UserName,
-		UpdatedAt: model.HumanTime(m.UpdatedAt),
+func GramFromModel(userID uint64) func(model.Gram) Gram {
+	return func(m model.Gram) Gram {
+		return Gram{
+			Gram:      m,
+			Me:        m.AuthorID == userID,
+			UpdatedAt: model.HumanTime(m.UpdatedAt),
+		}
 	}
 }
 
