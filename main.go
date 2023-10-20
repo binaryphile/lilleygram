@@ -11,7 +11,7 @@ import (
 	"github.com/binaryphile/lilleygram/gmni"
 	"github.com/binaryphile/lilleygram/handler"
 	"github.com/binaryphile/lilleygram/helper"
-	. "github.com/binaryphile/lilleygram/middleware"
+	"github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/must/osmust"
 	"github.com/binaryphile/lilleygram/must/tlsmust"
 	"github.com/binaryphile/lilleygram/opt"
@@ -47,7 +47,7 @@ func main() {
 
 	// authenticatedHandler operates behind required authentication.
 	// the logged-in user experience is here.
-	authenticatedHandler := ExtendHandler(
+	authenticatedHandler := middleware.ExtendHandler(
 		mountHandlers(map[string]Handler{
 			"/":                gramController,
 			"/grams":           gramController,
@@ -55,7 +55,7 @@ func main() {
 			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authenticatedBaseTemplates...)...),
 			"/users":           controller.NewUserController(userRepo),
 		}),
-		WithRequiredAuthentication(certAuthorizer),
+		middleware.WithRequiredAuthentication(certAuthorizer),
 	)
 
 	// unauthenticatedController operates behind optional authentication.
@@ -64,17 +64,17 @@ func main() {
 	// before being extended with optional authentication.
 	unauthenticatedController := controller.NewUnauthenticatedController(userRepo)
 
-	rootHandler := ExtendHandler(
+	rootHandler := middleware.ExtendHandler(
 		loginHandler(authenticatedHandler, unauthenticatedController),
-		WithOptionalAuthentication(certAuthorizer),
+		middleware.WithOptionalAuthentication(certAuthorizer),
 	)
 
 	deployEnv := opt.Getenv("DEPLOY_ENV").Or("production")
 
 	if deployEnv == "local" {
-		rootHandler = ExtendHandler(
+		rootHandler = middleware.ExtendHandler(
 			rootHandler,
-			WithLocalDeployEnv,
+			middleware.WithLocalDeployEnv,
 		)
 	}
 
@@ -102,7 +102,7 @@ func main() {
 
 func loginHandler(authenticatedHandler, unauthenticatedHandler Handler) HandlerFunc {
 	return func(writer ResponseWriter, request *Request) {
-		if _, ok := CertUserFromRequest(request); ok {
+		if _, ok := middleware.CertUserFromRequest(request); ok {
 			authenticatedHandler.ServeGemini(writer, request)
 			return
 		}
@@ -125,7 +125,7 @@ func mountHandlers(handlers map[string]Handler) HandlerFunc {
 	}
 }
 
-func newCertAuthorizer(repo sqlrepo.UserRepo) FnAuthorize {
+func newCertAuthorizer(repo sqlrepo.UserRepo) middleware.FnAuthorize {
 	return func(certID, _ string) (_ helper.User, ok bool) {
 		hash := sha256.Sum256([]byte(certID))
 

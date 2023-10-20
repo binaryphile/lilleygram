@@ -2,8 +2,14 @@ package gmni
 
 import (
 	"github.com/a-h/gemini"
-	. "github.com/binaryphile/lilleygram/controller/shortcuts"
+	. "github.com/binaryphile/lilleygram/gmni/shortcuts"
 	"log"
+)
+
+var (
+	BadRequest = gemini.BadRequest
+
+	NotFound = gemini.NotFound
 )
 
 func InputPrompt(writer ResponseWriter, message string) error {
@@ -20,10 +26,6 @@ func InternalServerError(writer ResponseWriter, err error) {
 	}
 
 	log.Print(err)
-}
-
-func NotFound(writer ResponseWriter, request *Request) {
-	gemini.NotFound(writer, request)
 }
 
 func Redirect(writer ResponseWriter, location string) error {

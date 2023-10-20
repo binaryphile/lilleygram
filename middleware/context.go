@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"github.com/a-h/gemini/mux"
-	"github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/helper"
+	. "github.com/binaryphile/lilleygram/middleware/shortcuts"
 	"strconv"
 )
 
@@ -16,7 +16,7 @@ const (
 	keyDeployEnv contextKey = "deploy_env"
 )
 
-func CertUserFromRequest(r *shortcuts.Request) (_ helper.User, ok bool) {
+func CertUserFromRequest(r *Request) (_ helper.User, ok bool) {
 	user, ok := r.Context.Value(keyUser).(helper.User)
 	if !ok {
 		return
@@ -25,7 +25,7 @@ func CertUserFromRequest(r *shortcuts.Request) (_ helper.User, ok bool) {
 	return user, ok
 }
 
-func StrFromRequest(request *shortcuts.Request, key string) (_ string, ok bool) {
+func StrFromRequest(request *Request, key string) (_ string, ok bool) {
 	route, ok := mux.GetMatchedRoute(request.Context)
 	if !ok {
 		return
@@ -39,7 +39,7 @@ func StrFromRequest(request *shortcuts.Request, key string) (_ string, ok bool) 
 	return strVar, true
 }
 
-func Uint64FromRequest(request *shortcuts.Request, key string) (_ uint64, ok bool) {
+func Uint64FromRequest(request *Request, key string) (_ uint64, ok bool) {
 	strVar, ok := StrFromRequest(request, key)
 	if !ok {
 		return

@@ -2,35 +2,6 @@ package opt
 
 import "os"
 
-type (
-	Value[T any] struct {
-		ok bool
-		v  T
-	}
-
-	Int64 = Value[int64]
-
-	String = Value[string]
-)
-
-func (v Value[T]) Or(ifNot T) T {
-	if v.ok {
-		return v.v
-	}
-
-	return ifNot
-}
-
-func (v Value[T]) OrZeroAndDo(fn func()) (_ T) {
-	if v.ok {
-		return v.v
-	}
-
-	fn()
-
-	return
-}
-
 func Apply[T, R any](fn func(T) R, v Value[T]) (_ Value[R]) {
 	if v.ok {
 		return Of(fn(v.v), true)

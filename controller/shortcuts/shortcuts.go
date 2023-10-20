@@ -3,7 +3,15 @@ package shortcuts
 import (
 	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
+	"github.com/binaryphile/lilleygram/middleware"
+	"github.com/binaryphile/lilleygram/shortcuts"
 	"text/template"
+)
+
+var (
+	LocalEnvFromRequest = middleware.LocalEnvFromRequest
+
+	Heredoc = shortcuts.Heredoc
 )
 
 type (

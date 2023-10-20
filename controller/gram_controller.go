@@ -40,11 +40,7 @@ func NewGramController(repo sqlrepo.GramRepo) GramController {
 		repo: repo,
 	}
 
-	fileName := "view/timeline.tmpl"
-
-	templates := append([]string{fileName}, c.baseTemplateNames...)
-
-	c.listTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
+	c.ListRefresh()
 
 	return c
 }
@@ -91,13 +87,7 @@ func (c GramController) List(writer ResponseWriter, request *Request) {
 		Grams: slice.Map(helper.GramFromModel(user.UserID), grams),
 	}
 
-	if deployEnv, ok := middleware.DeployEnvFromRequest(request); ok && deployEnv == "local" {
-		fileName := "view/timeline.tmpl"
-
-		templates := append([]string{fileName}, c.baseTemplateNames...)
-
-		c.listTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
-	}
+	LocalEnvFromRequest(request).AndDo(c.ListRefresh)
 
 	err = c.listTemplate.Execute(writer, data)
 }
@@ -112,6 +102,14 @@ func (c GramController) Handler(routes ...map[string]Handler) *Mux {
 	}
 
 	return router
+}
+
+func (c GramController) ListRefresh() {
+	fileName := "view/timeline.tmpl"
+
+	templates := append([]string{fileName}, c.baseTemplateNames...)
+
+	c.listTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 }
 
 func (c GramController) Routes() map[string]Handler {

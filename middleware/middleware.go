@@ -3,9 +3,10 @@ package middleware
 import (
 	"context"
 	"github.com/a-h/gemini"
-	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/gmni"
 	"github.com/binaryphile/lilleygram/helper"
+	. "github.com/binaryphile/lilleygram/middleware/shortcuts"
+	"github.com/binaryphile/lilleygram/opt"
 	"log"
 )
 
@@ -15,13 +16,8 @@ type (
 	Middleware = func(Handler) Handler
 )
 
-func DeployEnvFromRequest(r *Request) (_ string, ok bool) {
-	deployEnv, ok := r.Context.Value(keyDeployEnv).(string)
-	if !ok {
-		return
-	}
-
-	return deployEnv, ok
+func LocalEnvFromRequest(r *Request) opt.Bool {
+	return opt.Apply(equals("local"), opt.OfAssert[string](r.Context.Value(keyDeployEnv)))
 }
 
 func ExtendHandler(handler Handler, extensions ...Middleware) Handler {
@@ -109,5 +105,11 @@ func WithRequiredAuthentication(authorizer FnAuthorize) Middleware {
 
 			handler.ServeGemini(writer, request)
 		})
+	}
+}
+
+func equals[T comparable](orig T) func(T) bool {
+	return func(t T) bool {
+		return t == orig
 	}
 }

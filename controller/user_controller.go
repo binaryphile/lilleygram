@@ -3,7 +3,6 @@ package controller
 import (
 	"bytes"
 	"fmt"
-	"github.com/a-h/gemini"
 	"github.com/a-h/gemini/mux"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/gmni"
@@ -12,7 +11,6 @@ import (
 	"github.com/binaryphile/lilleygram/model"
 	. "github.com/binaryphile/lilleygram/must"
 	"github.com/binaryphile/lilleygram/opt"
-	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
 	"net/url"
@@ -23,11 +21,12 @@ import (
 
 type (
 	UserController struct {
-		baseTemplateNames []string
-		funcs             template.FuncMap
-		handler           *Mux
-		repo              sqlrepo.UserRepo
-		templates         map[string]*Template
+		baseTemplateNames   []string
+		funcs               template.FuncMap
+		handler             *Mux
+		repo                sqlrepo.UserRepo
+		passwordGetTemplate *Template
+		profileGetTemplate  *Template
 	}
 )
 
@@ -43,20 +42,12 @@ func NewUserController(repo sqlrepo.UserRepo) UserController {
 				return index + 1
 			},
 		},
-		repo:      repo,
-		templates: make(map[string]*Template),
+		repo: repo,
 	}
 
-	fileNames := map[string]string{
-		"passwordGet": "view/password.get.tmpl",
-		"profileGet":  "view/profile.get.tmpl",
-	}
+	c.PasswordRefresh()
 
-	for method, fileName := range fileNames {
-		templates := append([]string{fileName}, c.baseTemplateNames...)
-
-		c.templates[method] = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
-	}
+	c.ProfileRefresh()
 
 	return c
 }
@@ -104,7 +95,7 @@ func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
 
 	user, _ := middleware.CertUserFromRequest(request)
 
-	strID, _ := middleware.StrFromRequest(request, "userID")
+	strID, _ := middleware.StrFromRequest(request, "id")
 
 	intID, err := strconv.Atoi(strID)
 	if err != nil {
@@ -205,10 +196,20 @@ func (c UserController) PasswordGet(writer ResponseWriter, request *Request) {
 		User:     user,
 	}
 
-	err = c.templates["passwordGet"].Execute(writer, data)
+	LocalEnvFromRequest(request).AndDo(c.PasswordRefresh)
+
+	err = c.passwordGetTemplate.Execute(writer, data)
 	if err != nil {
 		return
 	}
+}
+
+func (c UserController) PasswordRefresh() {
+	fileName := "view/password.get.tmpl"
+
+	templates := append([]string{fileName}, c.baseTemplateNames...)
+
+	c.passwordGetTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 }
 
 func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
@@ -297,7 +298,7 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 
 	userID, ok := middleware.Uint64FromRequest(request, "id")
 	if !ok {
-		gemini.BadRequest(writer, request)
+		gmni.BadRequest(writer, request)
 		log.Print("no user id")
 		return
 	}
@@ -331,10 +332,20 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 		UserName:      p.UserName,
 	}
 
-	err = c.templates["profileGet"].Execute(writer, profile)
+	LocalEnvFromRequest(request).AndDo(c.ProfileRefresh)
+
+	err = c.profileGetTemplate.Execute(writer, profile)
 	if err != nil {
 		return
 	}
+}
+
+func (c UserController) ProfileRefresh() {
+	fileName := "view/profile.get.tmpl"
+
+	templates := append([]string{fileName}, c.baseTemplateNames...)
+
+	c.profileGetTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 }
 
 func (c UserController) Routes() map[string]Handler {

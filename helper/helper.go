@@ -46,7 +46,10 @@ func ValidateAvatar(avatar string) (_ string, ok bool) {
 		return
 	}
 
-	avatar = string(avatar[0])
+	for _, r := range avatar {
+		avatar = string(r)
+		break
+	}
 
 	return avatar, avatarRegex.MatchString(avatar)
 }

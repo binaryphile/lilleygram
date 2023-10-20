@@ -13,7 +13,6 @@ import (
 	"github.com/binaryphile/lilleygram/hash"
 	"github.com/binaryphile/lilleygram/middleware"
 	"github.com/binaryphile/lilleygram/opt"
-	. "github.com/binaryphile/lilleygram/shortcuts"
 	"github.com/binaryphile/lilleygram/sqlrepo"
 	"log"
 	"math/rand"

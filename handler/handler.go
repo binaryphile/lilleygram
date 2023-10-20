@@ -3,28 +3,29 @@ package handler
 import (
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
 	"github.com/binaryphile/lilleygram/gmni"
-	. "github.com/binaryphile/lilleygram/middleware"
+	"github.com/binaryphile/lilleygram/middleware"
 	"log"
 	"text/template"
 )
 
 func FileHandler(fileNames ...string) Handler {
-	tmpl, err := template.ParseFiles(fileNames...)
-	if err != nil {
-		log.Panic(err)
+	var tmpl *Template
+
+	var err error
+
+	refresh := func() {
+		tmpl, err = template.ParseFiles(fileNames...)
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 
-	return HandlerFunc(func(w ResponseWriter, request *Request) {
-		user, _ := CertUserFromRequest(request)
+	refresh()
 
-		if deployEnv, ok := DeployEnvFromRequest(request); ok && deployEnv == "local" {
-			var err error
+	return HandlerFunc(func(w ResponseWriter, r *Request) {
+		user, _ := middleware.CertUserFromRequest(r)
 
-			tmpl, err = template.ParseFiles(fileNames...)
-			if err != nil {
-				log.Panic(err)
-			}
-		}
+		LocalEnvFromRequest(r).AndDo(refresh)
 
 		err := tmpl.Execute(w, user)
 		if err != nil {
