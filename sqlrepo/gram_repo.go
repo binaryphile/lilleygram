@@ -1,32 +1,27 @@
 package sqlrepo
 
 import (
-	"database/sql"
 	"github.com/binaryphile/lilleygram/model"
-	. "github.com/binaryphile/lilleygram/shortcuts"
 	. "github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/sqlite3"
 )
 
 type (
 	GramRepo struct {
-		db  *Database
+		DB  DB
 		now func() int64
-		tx  *TxDatabase
 	}
 )
 
 func NewGramRepo(db *Database, now fnTime) GramRepo {
 	return GramRepo{
-		db:  db,
+		DB:  db,
 		now: now,
 	}
 }
 
 func (r GramRepo) Add(userID uint64, body string) (_ uint64, err error) {
-	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
-
-	query := db.
+	query := r.DB.
 		Insert("grams").
 		Rows(
 			Record{"user_id": userID, "body": body},
@@ -45,58 +40,22 @@ func (r GramRepo) Add(userID uint64, body string) (_ uint64, err error) {
 	return uint64(gramID), nil
 }
 
-func (r GramRepo) Begin() (_ GramRepo, err error) {
-	if r.tx != nil {
-		panic(unimplemented)
-	}
-
-	tx, err := r.db.Begin()
-	if err != nil {
-		return
-	}
-
-	return GramRepo{
-		db:  nil,
-		now: r.now,
-		tx:  tx,
-	}, nil
-}
-
-func (r GramRepo) BeginTx(ctx Context, opts *sql.TxOptions) (_ GramRepo, err error) {
-	if r.tx != nil {
-		panic(unimplemented)
-	}
-
-	tx, err := r.db.BeginTx(ctx, opts)
-	if err != nil {
-		return
-	}
-
-	return GramRepo{
-		db:  nil,
-		now: r.now,
-		tx:  tx,
-	}, nil
-}
-
 func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
-	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
-
 	grams := make([]model.Gram, 0, 25)
 
 	// This will return 1 row (of 1) if the gram's user is followed by the current user, 0 otherwise
-	isFollowing := db.
+	isFollowing := r.DB.
 		From("follows").
 		Select(V(1).As("following")).
 		Where(Ex{"follower_id": userID, "followed_id": I("g.user_id")}).
 		Limit(1)
 
-	followedUsers := db.
+	followedUsers := r.DB.
 		From("follows").
 		Select("followed_id").
 		Where(Ex{"follower_id": userID})
 
-	gramsQuery := db.
+	gramsQuery := r.DB.
 		From("grams").
 		Select("id").
 		Where(
@@ -106,7 +65,7 @@ func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 			),
 		)
 
-	sparklesQuery := db.
+	sparklesQuery := r.DB.
 		From("sparkles").
 		Select("gram_id").
 		Where(Ex{"user_id": followedUsers})
@@ -115,7 +74,7 @@ func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 	unioned := gramsQuery.UnionAll(sparklesQuery)
 
 	// Begin constructing the main query using the updated table names
-	query := db.
+	query := r.DB.
 		From(T("combined_grams").As("cg")).
 		With("combined_grams", unioned).
 		Join(T("grams").As("g"), On(Ex{"cg.id": I("g.id")})).
@@ -145,9 +104,7 @@ func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 }
 
 func (r GramRepo) Sparkle(gramID, userID uint64) (_ uint64, err error) {
-	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
-
-	query := db.
+	query := r.DB.
 		Insert("sparkles").
 		Rows(
 			Record{"gram_id": gramID, "user_id": userID},
@@ -168,19 +125,19 @@ func (r GramRepo) Sparkle(gramID, userID uint64) (_ uint64, err error) {
 
 // WithTx starts a new transaction and executes it in Wrap method
 func (r GramRepo) WithTx(fn func(GramRepo) error) error {
-	if r.tx != nil {
+	db, ok := r.DB.(Beginner)
+	if !ok {
 		panic(unimplemented)
 	}
 
-	tx, err := r.db.Begin()
+	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 
 	repo := GramRepo{
-		db:  nil,
+		DB:  tx,
 		now: r.now,
-		tx:  tx,
 	}
 
 	return tx.Wrap(

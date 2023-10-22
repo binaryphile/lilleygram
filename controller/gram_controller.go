@@ -20,13 +20,13 @@ import (
 type GramController struct {
 	baseTemplateNames []string
 	funcs             template.FuncMap
-	listTemplate      *Template
 	handler           *Mux
+	listTemplate      *Template
 	repo              sqlrepo.GramRepo
 }
 
-func NewGramController(repo sqlrepo.GramRepo) GramController {
-	c := GramController{
+func NewGramController(repo sqlrepo.GramRepo) *GramController {
+	c := &GramController{
 		baseTemplateNames: []string{
 			"view/layout/base.tmpl",
 			"view/partial/nav.tmpl",
@@ -45,7 +45,7 @@ func NewGramController(repo sqlrepo.GramRepo) GramController {
 	return c
 }
 
-func (c GramController) Add(writer ResponseWriter, request *Request) {
+func (c *GramController) Add(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -67,7 +67,7 @@ func (c GramController) Add(writer ResponseWriter, request *Request) {
 	err = gmni.Redirect(writer, "/")
 }
 
-func (c GramController) List(writer ResponseWriter, request *Request) {
+func (c *GramController) List(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -92,7 +92,7 @@ func (c GramController) List(writer ResponseWriter, request *Request) {
 	err = c.listTemplate.Execute(writer, data)
 }
 
-func (c GramController) Handler(routes ...map[string]Handler) *Mux {
+func (c *GramController) Handler(routes ...map[string]Handler) *Mux {
 	handlers := opt.OfFirst(routes).Or(c.Routes())
 
 	router := mux.NewMux()
@@ -104,7 +104,7 @@ func (c GramController) Handler(routes ...map[string]Handler) *Mux {
 	return router
 }
 
-func (c GramController) ListRefresh() {
+func (c *GramController) ListRefresh() {
 	fileName := "view/timeline.tmpl"
 
 	templates := append([]string{fileName}, c.baseTemplateNames...)
@@ -112,7 +112,7 @@ func (c GramController) ListRefresh() {
 	c.listTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 }
 
-func (c GramController) Routes() map[string]Handler {
+func (c *GramController) Routes() map[string]Handler {
 	return map[string]Handler{
 		"/":                   HandlerFunc(c.List),
 		"/grams/add":          HandlerFunc(c.Add),
@@ -120,7 +120,7 @@ func (c GramController) Routes() map[string]Handler {
 	}
 }
 
-func (c GramController) ServeGemini(writer ResponseWriter, request *Request) {
+func (c *GramController) ServeGemini(writer ResponseWriter, request *Request) {
 	if c.handler == nil {
 		c.handler = c.Handler()
 	}
@@ -128,7 +128,7 @@ func (c GramController) ServeGemini(writer ResponseWriter, request *Request) {
 	c.handler.ServeGemini(writer, request)
 }
 
-func (c GramController) Sparkle(writer ResponseWriter, request *Request) {
+func (c *GramController) Sparkle(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)

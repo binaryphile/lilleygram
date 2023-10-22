@@ -19,19 +19,17 @@ import (
 	"text/template"
 )
 
-type (
-	UserController struct {
-		baseTemplateNames   []string
-		funcs               template.FuncMap
-		handler             *Mux
-		repo                sqlrepo.UserRepo
-		passwordGetTemplate *Template
-		profileGetTemplate  *Template
-	}
-)
+type UserController struct {
+	baseTemplateNames   []string
+	funcs               template.FuncMap
+	handler             *Mux
+	passwordGetTemplate *Template
+	profileGetTemplate  *Template
+	repo                sqlrepo.UserRepo
+}
 
-func NewUserController(repo sqlrepo.UserRepo) UserController {
-	c := UserController{
+func NewUserController(repo sqlrepo.UserRepo) *UserController {
+	c := &UserController{
 		baseTemplateNames: []string{
 			"view/layout/base.tmpl",
 			"view/partial/footer.tmpl",
@@ -52,7 +50,7 @@ func NewUserController(repo sqlrepo.UserRepo) UserController {
 	return c
 }
 
-func (c UserController) AvatarSet(writer ResponseWriter, request *Request) {
+func (c *UserController) AvatarSet(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -88,7 +86,7 @@ func (c UserController) AvatarSet(writer ResponseWriter, request *Request) {
 	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/firstname/set", u.UserID))
 }
 
-func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
+func (c *UserController) FirstNameSet(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -133,7 +131,7 @@ func (c UserController) FirstNameSet(writer ResponseWriter, request *Request) {
 	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/lastname/set", pathUserID))
 }
 
-func (c UserController) Handler(routes ...map[string]Handler) *Mux {
+func (c *UserController) Handler(routes ...map[string]Handler) *Mux {
 	handlers := opt.OfFirst(routes).Or(c.Routes())
 
 	router := mux.NewMux()
@@ -145,7 +143,7 @@ func (c UserController) Handler(routes ...map[string]Handler) *Mux {
 	return router
 }
 
-func (c UserController) LastNameSet(writer ResponseWriter, request *Request) {
+func (c *UserController) LastNameSet(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -176,7 +174,7 @@ func (c UserController) LastNameSet(writer ResponseWriter, request *Request) {
 	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/profile", u.UserID))
 }
 
-func (c UserController) PasswordGet(writer ResponseWriter, request *Request) {
+func (c *UserController) PasswordGet(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -204,7 +202,7 @@ func (c UserController) PasswordGet(writer ResponseWriter, request *Request) {
 	}
 }
 
-func (c UserController) PasswordRefresh() {
+func (c *UserController) PasswordRefresh() {
 	fileName := "view/password.get.tmpl"
 
 	templates := append([]string{fileName}, c.baseTemplateNames...)
@@ -212,7 +210,7 @@ func (c UserController) PasswordRefresh() {
 	c.passwordGetTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 }
 
-func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
+func (c *UserController) PasswordSet(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -291,7 +289,7 @@ func (c UserController) PasswordSet(writer ResponseWriter, request *Request) {
 	err = gmni.Redirect(writer, fmt.Sprintf("/users/%d/profile", user.UserID))
 }
 
-func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
+func (c *UserController) ProfileGet(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
@@ -340,7 +338,7 @@ func (c UserController) ProfileGet(writer ResponseWriter, request *Request) {
 	}
 }
 
-func (c UserController) ProfileRefresh() {
+func (c *UserController) ProfileRefresh() {
 	fileName := "view/profile.get.tmpl"
 
 	templates := append([]string{fileName}, c.baseTemplateNames...)
@@ -348,7 +346,7 @@ func (c UserController) ProfileRefresh() {
 	c.profileGetTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 }
 
-func (c UserController) Routes() map[string]Handler {
+func (c *UserController) Routes() map[string]Handler {
 	return map[string]Handler{
 		"/users/{id}/avatar/set":    middleware.EyesOnly(HandlerFunc(c.AvatarSet)),
 		"/users/{id}/firstname/set": middleware.EyesOnly(HandlerFunc(c.FirstNameSet)),
@@ -360,7 +358,7 @@ func (c UserController) Routes() map[string]Handler {
 	}
 }
 
-func (c UserController) ServeGemini(writer ResponseWriter, request *Request) {
+func (c *UserController) ServeGemini(writer ResponseWriter, request *Request) {
 	if c.handler == nil {
 		c.handler = c.Handler()
 	}
@@ -368,7 +366,7 @@ func (c UserController) ServeGemini(writer ResponseWriter, request *Request) {
 	c.handler.ServeGemini(writer, request)
 }
 
-func (c UserController) UserNameSet(writer ResponseWriter, request *Request) {
+func (c *UserController) UserNameSet(writer ResponseWriter, request *Request) {
 	var err error
 
 	defer writeError(writer, err)
