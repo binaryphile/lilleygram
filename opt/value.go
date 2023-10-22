@@ -28,3 +28,11 @@ func (v Value[T]) OrZeroAndDo(fn func()) (_ T) {
 
 	return
 }
+
+func (v Value[T]) Unpack() (_ T, _ bool) {
+	if v.ok {
+		return v.v, true
+	}
+
+	return
+}

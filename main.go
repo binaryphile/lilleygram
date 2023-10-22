@@ -50,8 +50,9 @@ func main() {
 	authenticatedHandler := middleware.ExtendHandler(
 		mountHandlers(map[string]Handler{
 			"/":                gramController,
-			"/grams":           gramController,
+			"/discover":        gramController,
 			"/getting-started": handler.FileHandler(append([]string{"view/unauthenticated/getting-started.tmpl"}, authenticatedBaseTemplates...)...),
+			"/grams":           gramController,
 			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authenticatedBaseTemplates...)...),
 			"/users":           controller.NewUserController(userRepo),
 		}),
@@ -69,9 +70,7 @@ func main() {
 		middleware.WithOptionalAuthentication(certAuthorizer),
 	)
 
-	deployEnv := opt.Getenv("DEPLOY_ENV").Or("production")
-
-	if deployEnv == "local" {
+	if deployEnv, ok := opt.Getenv("DEPLOY_ENV").Unpack(); ok && deployEnv == "local" {
 		rootHandler = middleware.ExtendHandler(
 			rootHandler,
 			middleware.WithLocalDeployEnv,

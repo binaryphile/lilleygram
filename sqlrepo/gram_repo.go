@@ -40,6 +40,69 @@ func (r GramRepo) Add(userID uint64, body string) (_ uint64, err error) {
 	return uint64(gramID), nil
 }
 
+func (r GramRepo) Discover(userID uint64) (_ []model.Gram, err error) {
+	grams := make([]model.Gram, 0, 25)
+
+	// This will return 1 row (of 1) if the gram's user is followed by the current user, 0 otherwise
+	isFollowing := r.DB.
+		From("follows").
+		Select(V(1).As("following")).
+		Where(Ex{"follower_id": userID, "followed_id": I("g.user_id")}).
+		Limit(1)
+
+	followedUsers := r.DB.
+		From("follows").
+		Select("followed_id").
+		Where(Ex{"follower_id": userID})
+
+	gramsQuery := r.DB.
+		From("grams").
+		Select("id").
+		Where(
+			Or(
+				Ex{"user_id": followedUsers},
+				Ex{"user_id": userID},
+			),
+		)
+
+	sparklesQuery := r.DB.
+		From("sparkles").
+		Select("gram_id").
+		Where(Ex{"user_id": followedUsers})
+
+	// Union the two queries
+	unioned := gramsQuery.UnionAll(sparklesQuery)
+
+	// Begin constructing the main query using the updated table names
+	query := r.DB.
+		From(T("combined_grams").As("cg")).
+		With("combined_grams", unioned).
+		Join(T("grams").As("g"), On(Ex{"cg.id": I("g.id")})).
+		Join(T("users").As("u"), On(Ex{"g.user_id": I("u.id")})).
+		LeftJoin(T("sparkles").As("s"), On(Ex{"cg.id": I("s.gram_id")})).
+		Select(
+			"g.id",
+			"g.user_id",
+			"u.user_name",
+			"u.avatar",
+			"g.body",
+			COUNT(I("s.id")).As("sparkles"),
+			"g.expire_at",
+			"g.created_at",
+			"g.updated_at",
+			COALESCE(isFollowing, 0).As("following_author"),
+		).
+		GroupBy(I("cg.id")).
+		Order(I("g.created_at").Desc())
+
+	err = query.ScanStructs(&grams)
+	if err != nil {
+		return
+	}
+
+	return grams, nil
+}
+
 func (r GramRepo) List(userID uint64) (_ []model.Gram, err error) {
 	grams := make([]model.Gram, 0, 25)
 

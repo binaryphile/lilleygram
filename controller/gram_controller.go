@@ -19,6 +19,7 @@ import (
 
 type GramController struct {
 	baseTemplateNames []string
+	discoverTemplate  *Template
 	funcs             template.FuncMap
 	handler           *Mux
 	listTemplate      *Template
@@ -39,6 +40,8 @@ func NewGramController(repo sqlrepo.GramRepo) *GramController {
 		},
 		repo: repo,
 	}
+
+	c.DiscoverRefresh()
 
 	c.ListRefresh()
 
@@ -65,6 +68,26 @@ func (c *GramController) Add(writer ResponseWriter, request *Request) {
 	}
 
 	err = gmni.Redirect(writer, "/")
+}
+
+func (c *GramController) Discover(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
+	user, _ := middleware.CertUserFromRequest(request)
+
+	LocalEnvFromRequest(request).AndDo(c.DiscoverRefresh)
+
+	err = c.discoverTemplate.Execute(writer, user)
+}
+
+func (c *GramController) DiscoverRefresh() {
+	fileName := "view/discover_proto.tmpl"
+
+	templates := append([]string{fileName}, c.baseTemplateNames...)
+
+	c.discoverTemplate = Must(template.New(filepath.Base(fileName)).Funcs(c.funcs).ParseFiles(templates...))
 }
 
 func (c *GramController) List(writer ResponseWriter, request *Request) {
@@ -115,6 +138,7 @@ func (c *GramController) ListRefresh() {
 func (c *GramController) Routes() map[string]Handler {
 	return map[string]Handler{
 		"/":                   HandlerFunc(c.List),
+		"/discover":           HandlerFunc(c.Discover),
 		"/grams/add":          HandlerFunc(c.Add),
 		"/grams/{id}/sparkle": HandlerFunc(c.Sparkle),
 	}
