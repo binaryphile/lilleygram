@@ -1,11 +1,15 @@
 package sqlrepo
 
 import (
+	"database/sql"
 	"errors"
 	"github.com/binaryphile/lilleygram/model"
+	. "github.com/binaryphile/lilleygram/shortcuts"
 	. "github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/sqlite3"
 )
+
+const unimplemented = "unimplemented"
 
 type (
 	UserRepo struct {
@@ -14,8 +18,10 @@ type (
 		tx  *TxDatabase
 	}
 
-	Inserter interface {
-		Insert(interface{}) *InsertDataset
+	DB interface {
+		From(...any) *SelectDataset
+		Insert(any) *InsertDataset
+		Update(any) *UpdateDataset
 	}
 
 	fnTime = func() int64
@@ -29,7 +35,7 @@ func NewUserRepo(db *Database, now fnTime) UserRepo {
 }
 
 func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, err error) {
-	db := ifThenElse[Inserter](r.tx != nil, r.tx, r.db)
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
 
 	query := db.
 		Insert("users").
@@ -50,14 +56,42 @@ func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, e
 	return uint64(userID), nil
 }
 
-func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) error {
-	var db Inserter
-
+func (r UserRepo) Begin() (_ UserRepo, err error) {
 	if r.tx != nil {
-		db = r.tx
-	} else {
-		db = r.db
+		panic(unimplemented)
 	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return
+	}
+
+	return UserRepo{
+		db:  nil,
+		now: r.now,
+		tx:  tx,
+	}, nil
+}
+
+func (r UserRepo) BeginTx(ctx Context, opts *sql.TxOptions) (_ UserRepo, err error) {
+	if r.tx != nil {
+		panic(unimplemented)
+	}
+
+	tx, err := r.db.BeginTx(ctx, opts)
+	if err != nil {
+		return
+	}
+
+	return UserRepo{
+		db:  nil,
+		now: r.now,
+		tx:  tx,
+	}, nil
+}
+
+func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) error {
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
 
 	query := db.
 		Insert("certificates").
@@ -71,9 +105,11 @@ func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) e
 }
 
 func (r UserRepo) CertificateListByUser(userID uint64) (_ []model.Certificate, err error) {
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
 	certificates := make([]model.Certificate, 0)
 
-	query := r.db.
+	query := db.
 		From("certificates").
 		Where(Ex{"user_id": userID})
 
@@ -86,9 +122,11 @@ func (r UserRepo) CertificateListByUser(userID uint64) (_ []model.Certificate, e
 }
 
 func (r UserRepo) CodeGet(_ uint64) (_ string, found bool, err error) {
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
 	var code string
 
-	query := r.db.
+	query := db.
 		From("registration").
 		Select("code").
 		Limit(1)
@@ -100,18 +138,12 @@ func (r UserRepo) CodeGet(_ uint64) (_ string, found bool, err error) {
 	return code, true, nil
 }
 
-func (r UserRepo) Commit() (_ error) {
-	if r.tx != nil {
-		return r.tx.Commit()
-	}
-
-	return
-}
-
 func (r UserRepo) Get(id uint64) (_ model.User, found bool, err error) {
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
 	var u model.User
 
-	query := r.db.
+	query := db.
 		From("users").
 		Join(
 			T("certificates"),
@@ -127,7 +159,9 @@ func (r UserRepo) Get(id uint64) (_ model.User, found bool, err error) {
 }
 
 func (r UserRepo) GetByCertificate(certSHA256 string) (_ model.User, found bool, err error) {
-	query := r.db.
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
+	query := db.
 		From("users").
 		Join(
 			T("certificates"), On(Ex{"users.id": I("certificates.user_id")}),
@@ -146,9 +180,11 @@ func (r UserRepo) GetByCertificate(certSHA256 string) (_ model.User, found bool,
 }
 
 func (r UserRepo) GetByUserName(userName string) (_ model.User, found bool, err error) {
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
 	var u model.User
 
-	query := r.db.
+	query := db.
 		From("users").
 		Where(
 			Ex{"user_name": userName},
@@ -162,9 +198,11 @@ func (r UserRepo) GetByUserName(userName string) (_ model.User, found bool, err 
 }
 
 func (r UserRepo) PasswordGet(userID uint64) (_ model.Password, found bool, err error) {
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
 	var p model.Password
 
-	query := r.db.
+	query := db.
 		From("passwords").
 		Where(Ex{"user_id": userID})
 
@@ -178,7 +216,9 @@ func (r UserRepo) PasswordGet(userID uint64) (_ model.Password, found bool, err 
 }
 
 func (r UserRepo) PasswordSet(userID uint64, password model.Password) error {
-	query := r.db.
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
+	query := db.
 		Update("passwords").
 		Where(Ex{"user_id": userID}).
 		Set(
@@ -196,7 +236,7 @@ func (r UserRepo) PasswordSet(userID uint64, password model.Password) error {
 	}
 
 	if affected == 0 {
-		query := r.db.
+		query := db.
 			Insert("passwords").
 			Rows(
 				Record{"user_id": userID, "argon2": password.Argon2, "salt": password.Salt},
@@ -211,9 +251,11 @@ func (r UserRepo) PasswordSet(userID uint64, password model.Password) error {
 }
 
 func (r UserRepo) ProfileGet(userID uint64) (_ model.Profile, _ []model.Certificate, found bool, err error) {
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
 	var profile model.Profile
 
-	query := r.db.
+	query := db.
 		From("users").
 		LeftOuterJoin(
 			T("passwords"), On(Ex{"users.id": I("passwords.user_id")}),
@@ -232,29 +274,10 @@ func (r UserRepo) ProfileGet(userID uint64) (_ model.Profile, _ []model.Certific
 	return profile, certificates, true, nil
 }
 
-func (r UserRepo) Rollback() (_ error) {
-	if r.tx != nil {
-		return r.tx.Rollback()
-	}
-
-	return
-}
-
-func (r UserRepo) Begin() (_ UserRepo, err error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return
-	}
-
-	return UserRepo{
-		db:  r.db,
-		now: r.now,
-		tx:  tx,
-	}, nil
-}
-
 func (r UserRepo) UpdateAvatar(userID uint64, avatar string) error {
-	query := r.db.
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
+	query := db.
 		Update("users").
 		Where(Ex{"id": userID}).
 		Set(
@@ -279,7 +302,9 @@ func (r UserRepo) UpdateAvatar(userID uint64, avatar string) error {
 }
 
 func (r UserRepo) UpdateFirstName(userID uint64, firstName string) error {
-	query := r.db.
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
+	query := db.
 		Update("users").
 		Where(Ex{"id": userID}).
 		Set(
@@ -304,7 +329,9 @@ func (r UserRepo) UpdateFirstName(userID uint64, firstName string) error {
 }
 
 func (r UserRepo) UpdateLastName(userID uint64, lastName string) error {
-	query := r.db.
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
+	query := db.
 		Update("users").
 		Where(Ex{"id": userID}).
 		Set(
@@ -329,7 +356,9 @@ func (r UserRepo) UpdateLastName(userID uint64, lastName string) error {
 }
 
 func (r UserRepo) UpdateSeen(userID uint64) error {
-	query := r.db.
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
+	query := db.
 		Update("users").
 		Where(Ex{"id": userID}).
 		Set(
@@ -354,7 +383,9 @@ func (r UserRepo) UpdateSeen(userID uint64) error {
 }
 
 func (r UserRepo) UpdateUserName(userID uint64, userName string) error {
-	query := r.db.
+	db := ifThenElse[DB](r.tx != nil, r.tx, r.db)
+
+	query := db.
 		Update("users").
 		Where(Ex{"id": userID}).
 		Set(
@@ -380,13 +411,17 @@ func (r UserRepo) UpdateUserName(userID uint64, userName string) error {
 
 // WithTx starts a new transaction and executes it in Wrap method
 func (r UserRepo) WithTx(fn func(UserRepo) error) error {
+	if r.tx != nil {
+		panic(unimplemented)
+	}
+
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
 
 	repo := UserRepo{
-		db:  r.db,
+		db:  nil,
 		now: r.now,
 		tx:  tx,
 	}
