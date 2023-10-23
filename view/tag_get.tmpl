@@ -1,16 +1,17 @@
 {{template "base" . -}}
 {{define "main" -}}
-## Timeline
+## {{.Hashtag}}
 
 {{if .Grams -}}
 {{range .Grams -}}
-### {{.AuthorUserName}} {{.AuthorAvatar}} {{.UpdatedAt}}
-{{.Body}}
+### {{.Body}}
+{{.AuthorUserName}} {{.AuthorAvatar}} {{.UpdatedAt}}
+
 
 ---
 => /grams/{{.ID}}/sparkle ✨ Sparkle{{if .Sparkles}} ({{.Sparkles}}){{end}}
-{{if and (not .Me) (not .TrackingAuthor) -}}
-=> /users/{{.AuthorID}}/track 🐾 Track
+{{if not .FollowingAuthor and not .Me -}}
+=> /users/{{.AuthorID}}/follow 🔊 Follow
 {{end -}}
 
 

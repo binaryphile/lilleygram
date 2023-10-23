@@ -8,6 +8,7 @@ require (
 	github.com/doug-martin/goqu/v9 v9.18.0
 	github.com/dustin/go-humanize v1.0.1
 	golang.org/x/crypto v0.0.0-20201216223049-8b5274cf687f
+	google.golang.org/protobuf v1.31.0
 	modernc.org/sqlite v1.25.0
 )
 

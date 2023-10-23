@@ -1,8 +1,8 @@
-package gmni
+package gmnifc
 
 import (
 	"github.com/a-h/gemini"
-	. "github.com/binaryphile/lilleygram/gmni/shortcuts"
+	. "github.com/binaryphile/lilleygram/gmnifc/shortcuts"
 	"log"
 )
 

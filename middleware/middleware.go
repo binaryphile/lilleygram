@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 	"github.com/a-h/gemini"
-	"github.com/binaryphile/lilleygram/gmni"
+	"github.com/binaryphile/lilleygram/gmnifc"
 	"github.com/binaryphile/lilleygram/helper"
 	. "github.com/binaryphile/lilleygram/middleware/shortcuts"
 	"github.com/binaryphile/lilleygram/opt"
@@ -37,7 +37,7 @@ func EyesOnly(handler Handler) Handler {
 		userID, _ := Uint64FromRequest(request, "id")
 
 		if user.UserID != userID {
-			gmni.NotFound(writer, request)
+			gmnifc.NotFound(writer, request)
 			return
 		}
 
@@ -51,6 +51,16 @@ func WithLocalDeployEnv(handler Handler) Handler {
 
 		handler.ServeGemini(w, request)
 	})
+}
+
+func WithRefresh(refresh func()) Middleware {
+	return func(handler Handler) Handler {
+		return HandlerFunc(func(writer ResponseWriter, request *Request) {
+			LocalEnvFromRequest(request).AndDo(refresh)
+
+			handler.ServeGemini(writer, request)
+		})
+	}
 }
 
 func WithOptionalAuthentication(authorizer FnAuthorize) Middleware {

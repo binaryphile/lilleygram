@@ -11,12 +11,24 @@ func (v Value[T]) AndDo(fn func()) {
 	}
 }
 
+func (v Value[T]) IsOk() bool {
+	return v.ok
+}
+
 func (v Value[T]) Or(ifNot T) T {
 	if v.ok {
 		return v.v
 	}
 
 	return ifNot
+}
+
+func (v Value[T]) OrZero() (_ T) {
+	if v.ok {
+		return v.v
+	}
+
+	return
 }
 
 func (v Value[T]) OrZeroAndDo(fn func()) (_ T) {

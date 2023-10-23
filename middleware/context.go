@@ -7,13 +7,14 @@ import (
 	"strconv"
 )
 
-type (
-	contextKey string
+const (
+	keyUser contextKey = "user"
+
+	keyDeployEnv contextKey = "deploy_env"
 )
 
-const (
-	keyUser      contextKey = "user"
-	keyDeployEnv contextKey = "deploy_env"
+type (
+	contextKey string
 )
 
 func CertUserFromRequest(r *Request) (_ helper.User, ok bool) {
@@ -37,6 +38,21 @@ func StrFromRequest(request *Request, key string) (_ string, ok bool) {
 	}
 
 	return strVar, true
+}
+
+func PageTokenFromRequest(request *Request) string {
+	values := request.URL.Query()
+
+	pageTokens, ok := values["page_token"]
+	if !ok {
+		return ""
+	}
+
+	if len(pageTokens) == 0 {
+		return ""
+	}
+
+	return pageTokens[0]
 }
 
 func Uint64FromRequest(request *Request, key string) (_ uint64, ok bool) {

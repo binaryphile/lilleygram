@@ -1,12 +1,11 @@
-CREATE TABLE grams
+CREATE TABLE tracks
 (
     id         INTEGER NOT NULL PRIMARY KEY,
-    body       TEXT    NOT NULL COLLATE NOCASE,
     expire_at  INTEGER NOT NULL DEFAULT 0,
+    tracked_id INTEGER NOT NULL,
+    tracker_id INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    user_id    INTEGER NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users (id)
+    FOREIGN KEY (tracked_id) REFERENCES users (id),
+    FOREIGN KEY (tracker_id) REFERENCES users (id)
 );
-
-CREATE INDEX idx_updated_at_id ON grams(updated_at, id);

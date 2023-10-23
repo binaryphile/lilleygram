@@ -1,0 +1,10 @@
+version: v1
+managed:
+  enabled: true
+  go_package_prefix:
+    default: github.com/binaryphile/lilleygram/pb
+plugins:
+  - plugin: buf.build/protocolbuffers/go
+    out: pb
+    opt: paths=source_relative
+

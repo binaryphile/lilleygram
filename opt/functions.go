@@ -22,8 +22,8 @@ func Of[T any](t T, ok bool) (_ Value[T]) {
 	return
 }
 
-func OfAssert[R, T any](t T) Value[R] {
-	v, ok := any(t).(R)
+func OfAssert[T any](a any) Value[T] {
+	v, ok := a.(T)
 
 	return Of(v, ok)
 }
@@ -44,5 +44,11 @@ func OfOk[T any](value T) Value[T] {
 	return Value[T]{
 		ok: true,
 		v:  value,
+	}
+}
+
+func TypeOfNonZero[R any, T comparable](value T) (zero Type[T, R]) {
+	return Type[T, R]{
+		Value: Of(value, value != zero.v),
 	}
 }

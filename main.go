@@ -8,7 +8,7 @@ import (
 	"github.com/a-h/gemini"
 	"github.com/binaryphile/lilleygram/controller"
 	. "github.com/binaryphile/lilleygram/controller/shortcuts"
-	"github.com/binaryphile/lilleygram/gmni"
+	"github.com/binaryphile/lilleygram/gmnifc"
 	"github.com/binaryphile/lilleygram/handler"
 	"github.com/binaryphile/lilleygram/helper"
 	"github.com/binaryphile/lilleygram/middleware"
@@ -54,6 +54,7 @@ func main() {
 			"/getting-started": handler.FileHandler(append([]string{"view/unauthenticated/getting-started.tmpl"}, authenticatedBaseTemplates...)...),
 			"/grams":           gramController,
 			"/register":        handler.FileHandler(append([]string{"view/register.tmpl"}, authenticatedBaseTemplates...)...),
+			"/tags":            gramController,
 			"/users":           controller.NewUserController(userRepo),
 		}),
 		middleware.WithRequiredAuthentication(certAuthorizer),
@@ -119,7 +120,7 @@ func mountHandlers(handlers map[string]Handler) HandlerFunc {
 		if h, ok := handlers["/"+first]; ok {
 			h.ServeGemini(writer, request)
 		} else {
-			gmni.NotFound(writer, request)
+			gmnifc.NotFound(writer, request)
 		}
 	}
 }
@@ -170,7 +171,7 @@ func openSQL(fileName string) (db *sql.DB, cleanup func()) {
 		panic("flyway schema version not found")
 	}
 
-	if rank != 9 {
+	if rank != 10 {
 		panic("database out of version")
 	}
 
