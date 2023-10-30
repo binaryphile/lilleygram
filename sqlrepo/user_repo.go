@@ -38,9 +38,7 @@ func NewUserRepo(db *Database, now fnTime) UserRepo {
 func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, err error) {
 	query := r.DB.
 		Insert("users").
-		Rows(
-			Record{"avatar": avatar, "first_name": firstName, "last_name": lastName, "user_name": userName},
-		)
+		Rows(Record{"avatar": avatar, "first_name": firstName, "last_name": lastName, "user_name": userName})
 
 	result, err := query.Executor().Exec()
 	if err != nil {
@@ -58,9 +56,7 @@ func (r UserRepo) Add(firstName, lastName, userName, avatar string) (_ uint64, e
 func (r UserRepo) CertificateAdd(sha256 string, expireAt int64, userID uint64) error {
 	query := r.DB.
 		Insert("certificates").
-		Rows(
-			Record{"cert_sha256": sha256, "expire_at": expireAt, "user_id": userID},
-		)
+		Rows(Record{"cert_sha256": sha256, "expire_at": expireAt, "user_id": userID})
 
 	_, err := query.Executor().Exec()
 
@@ -118,12 +114,8 @@ func (r UserRepo) Get(id uint64) (_ model.User, found bool, err error) {
 func (r UserRepo) GetByCertificate(certSHA256 string) (_ model.User, found bool, err error) {
 	query := r.DB.
 		From("users").
-		Join(
-			T("certificates"), On(Ex{"users.id": I("certificates.user_id")}),
-		).
-		Where(
-			Ex{"cert_sha256": certSHA256},
-		)
+		Join(T("certificates"), On(Ex{"users.id": I("certificates.user_id")})).
+		Where(Ex{"cert_sha256": certSHA256})
 
 	var u model.User
 
@@ -139,9 +131,7 @@ func (r UserRepo) GetByUserName(userName string) (_ model.User, found bool, err 
 
 	query := r.DB.
 		From("users").
-		Where(
-			Ex{"user_name": userName},
-		)
+		Where(Ex{"user_name": userName})
 
 	if found, err = query.ScanStruct(&u); err != nil || !found {
 		return
@@ -170,9 +160,7 @@ func (r UserRepo) PasswordSet(userID uint64, password model.Password) error {
 	query := r.DB.
 		Update("passwords").
 		Where(Ex{"user_id": userID}).
-		Set(
-			Record{"argon2": password.Argon2, "salt": password.Salt, "updated_at": r.now()},
-		)
+		Set(Record{"argon2": password.Argon2, "salt": password.Salt, "updated_at": r.now()})
 
 	result, err := query.Executor().Exec()
 	if err != nil {
@@ -187,9 +175,7 @@ func (r UserRepo) PasswordSet(userID uint64, password model.Password) error {
 	if affected == 0 {
 		query := r.DB.
 			Insert("passwords").
-			Rows(
-				Record{"user_id": userID, "argon2": password.Argon2, "salt": password.Salt},
-			)
+			Rows(Record{"user_id": userID, "argon2": password.Argon2, "salt": password.Salt})
 
 		if _, err = query.Executor().Exec(); err != nil {
 			return err
@@ -204,9 +190,7 @@ func (r UserRepo) ProfileGet(userID uint64) (_ model.Profile, _ []model.Certific
 
 	query := r.DB.
 		From("users").
-		LeftOuterJoin(
-			T("passwords"), On(Ex{"users.id": I("passwords.user_id")}),
-		).
+		LeftOuterJoin(T("passwords"), On(Ex{"users.id": I("passwords.user_id")})).
 		Where(Ex{"id": userID})
 
 	if found, err = query.ScanStruct(&profile); err != nil || !found {
@@ -221,13 +205,26 @@ func (r UserRepo) ProfileGet(userID uint64) (_ model.Profile, _ []model.Certific
 	return profile, certificates, true, nil
 }
 
+func (r UserRepo) Track(trackedID, trackerID uint64) error {
+	query := r.DB.
+		Insert("tracks").
+		Rows(Record{"tracked_id": trackedID, "tracker_id": trackerID})
+
+	result, err := query.Executor().Exec()
+	if err != nil {
+		return err
+	}
+
+	_, err = result.LastInsertId()
+
+	return err
+}
+
 func (r UserRepo) UpdateAvatar(userID uint64, avatar string) error {
 	query := r.DB.
 		Update("users").
 		Where(Ex{"id": userID}).
-		Set(
-			Record{"avatar": avatar, "updated_at": r.now()},
-		)
+		Set(Record{"avatar": avatar, "updated_at": r.now()})
 
 	result, err := query.Executor().Exec()
 	if err != nil {
@@ -250,9 +247,7 @@ func (r UserRepo) UpdateFirstName(userID uint64, firstName string) error {
 	query := r.DB.
 		Update("users").
 		Where(Ex{"id": userID}).
-		Set(
-			Record{"first_name": firstName, "updated_at": r.now()},
-		)
+		Set(Record{"first_name": firstName, "updated_at": r.now()})
 
 	result, err := query.Executor().Exec()
 	if err != nil {
@@ -275,9 +270,7 @@ func (r UserRepo) UpdateLastName(userID uint64, lastName string) error {
 	query := r.DB.
 		Update("users").
 		Where(Ex{"id": userID}).
-		Set(
-			Record{"last_name": lastName, "updated_at": r.now()},
-		)
+		Set(Record{"last_name": lastName, "updated_at": r.now()})
 
 	result, err := query.Executor().Exec()
 	if err != nil {
@@ -300,9 +293,7 @@ func (r UserRepo) UpdateSeen(userID uint64) error {
 	query := r.DB.
 		Update("users").
 		Where(Ex{"id": userID}).
-		Set(
-			Record{"last_seen": r.now()},
-		)
+		Set(Record{"last_seen": r.now()})
 
 	result, err := query.Executor().Exec()
 	if err != nil {
@@ -325,9 +316,7 @@ func (r UserRepo) UpdateUserName(userID uint64, userName string) error {
 	query := r.DB.
 		Update("users").
 		Where(Ex{"id": userID}).
-		Set(
-			Record{"user_name": userName, "updated_at": r.now()},
-		)
+		Set(Record{"user_name": userName, "updated_at": r.now()})
 
 	result, err := query.Executor().Exec()
 	if err != nil {

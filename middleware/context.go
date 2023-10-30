@@ -26,20 +26,6 @@ func CertUserFromRequest(r *Request) (_ helper.User, ok bool) {
 	return user, ok
 }
 
-func StrFromRequest(request *Request, key string) (_ string, ok bool) {
-	route, ok := mux.GetMatchedRoute(request.Context)
-	if !ok {
-		return
-	}
-
-	strVar, ok := route.PathVars[key]
-	if !ok {
-		return
-	}
-
-	return strVar, true
-}
-
 func PageTokenFromRequest(request *Request) string {
 	values := request.URL.Query()
 
@@ -53,6 +39,20 @@ func PageTokenFromRequest(request *Request) string {
 	}
 
 	return pageTokens[0]
+}
+
+func StrFromRequest(request *Request, key string) (_ string, ok bool) {
+	route, ok := mux.GetMatchedRoute(request.Context)
+	if !ok {
+		return
+	}
+
+	strVar, ok := route.PathVars[key]
+	if !ok {
+		return
+	}
+
+	return strVar, true
 }
 
 func Uint64FromRequest(request *Request, key string) (_ uint64, ok bool) {

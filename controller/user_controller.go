@@ -349,6 +349,7 @@ func (c *UserController) Routes() map[string]Handler {
 		"/users/{id}/password":      ExtendHandler(HandlerFunc(c.PasswordGet), WithRefresh(c.PasswordGetRefresh)),
 		"/users/{id}/password/set":  middleware.EyesOnly(HandlerFunc(c.PasswordSet)),
 		"/users/{id}/profile":       ExtendHandler(HandlerFunc(c.ProfileGet), WithRefresh(c.ProfileGetRefresh)),
+		"/users/{id}/track":         HandlerFunc(c.Track),
 		"/users/{id}/username/set":  middleware.EyesOnly(HandlerFunc(c.UserNameSet)),
 	}
 }
@@ -359,6 +360,23 @@ func (c *UserController) ServeGemini(writer ResponseWriter, request *Request) {
 	}
 
 	c.handler.ServeGemini(writer, request)
+}
+
+func (c *UserController) Track(writer ResponseWriter, request *Request) {
+	var err error
+
+	defer writeError(writer, err)
+
+	tracker, _ := middleware.CertUserFromRequest(request)
+
+	trackedID, _ := middleware.Uint64FromRequest(request, "id")
+
+	err = c.repo.Track(trackedID, tracker.UserID)
+	if err != nil {
+		return
+	}
+
+	err = gmnifc.Redirect(writer, "/")
 }
 
 func (c *UserController) UserNameSet(writer ResponseWriter, request *Request) {

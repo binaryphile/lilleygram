@@ -4,8 +4,8 @@
 
 {{if .Grams -}}
 {{range .Grams -}}
-### {{.AuthorUserName}} {{.AuthorAvatar}} {{.UpdatedAt}}
-{{.Body}}
+### {{.Body}}
+{{.AuthorUserName}} {{.AuthorAvatar}} {{.UpdatedAt}}
 
 ---
 => /grams/{{.ID}}/sparkle ✨ Sparkle{{if .Sparkles}} ({{.Sparkles}}){{end}}

@@ -6,6 +6,7 @@ CREATE TABLE tracks
     tracker_id INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    UNIQUE(tracked_id, tracker_id),
     FOREIGN KEY (tracked_id) REFERENCES users (id),
     FOREIGN KEY (tracker_id) REFERENCES users (id)
 );
