@@ -1,22 +1,16 @@
 {{template "base" . -}}
 {{define "main" -}}
-## Timeline
+# Timeline
 
 {{if .Grams -}}
 {{range .Grams -}}
-### {{.Body}}
+> {{.Body}}
 {{.AuthorUserName}} {{.AuthorAvatar}} {{.UpdatedAt}}
-
----
 => /grams/{{.ID}}/sparkle ✨ Sparkle{{if .Sparkles}} ({{.Sparkles}}){{end}}
 {{if and (not .Me) (not .TrackingAuthor) -}}
 => /users/{{.AuthorID}}/track 🐾 Track
-{{end -}}
+{{end}}
 
-
-
-{{else -}}
----
 {{end -}}
 {{else -}}
 There's nothing to see here yet!

@@ -7,8 +7,6 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/sqlite3"
 )
 
-const unimplemented = "unimplemented"
-
 type (
 	UserRepo struct {
 		DB  DB
@@ -337,10 +335,7 @@ func (r UserRepo) UpdateUserName(userID uint64, userName string) error {
 
 // WithTx starts a new transaction and executes it in Wrap method
 func (r UserRepo) WithTx(fn func(UserRepo) error) error {
-	db, ok := r.DB.(Beginner)
-	if !ok {
-		panic(unimplemented)
-	}
+	db := r.DB.(Beginner)
 
 	tx, err := db.Begin()
 	if err != nil {

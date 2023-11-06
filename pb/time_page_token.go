@@ -22,6 +22,10 @@ func (t *TimePageToken) Marshal() string {
 	return base64.RawURLEncoding.EncodeToString(token)
 }
 
+func PageSize(t *TimePageToken) uint32 {
+	return t.PageSize
+}
+
 func UnmarshalTimePageToken(pageToken string) *TimePageToken {
 	if pageToken == "" {
 		return nil

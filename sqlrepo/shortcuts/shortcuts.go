@@ -1,6 +1,8 @@
 package shortcuts
 
-import "github.com/doug-martin/goqu/v9"
+import (
+	"github.com/doug-martin/goqu/v9"
+)
 
 var (
 	COUNT = goqu.COUNT
@@ -22,6 +24,8 @@ type (
 	Database = goqu.Database
 
 	Ex = goqu.Ex
+
+	ExOr = goqu.ExOr
 
 	Op = goqu.Op
 

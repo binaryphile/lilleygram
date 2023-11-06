@@ -10,6 +10,7 @@ import (
 	"github.com/binaryphile/lilleygram/opt"
 	"github.com/binaryphile/lilleygram/slice"
 	"github.com/binaryphile/lilleygram/sqlrepo"
+	"github.com/binaryphile/lilleygram/sqlrepo/defaults"
 	"log"
 	"net/url"
 	"path/filepath"
@@ -19,7 +20,7 @@ import (
 )
 
 const (
-	tagPattern = `\b#[[:alpha:]]\w+[[:alnum:]]\b`
+	tagPattern = `(^|\s)(#[[:alpha:]]\w+[[:alnum:]]+\b)`
 )
 
 var (
@@ -86,7 +87,7 @@ func (c *GramController) Add(writer ResponseWriter, request *Request) {
 	var tags []string
 
 	for _, match := range matches {
-		tag := match[1]
+		tag := match[2]
 
 		if len(tag) <= 26 && !strings.Contains(tag, "__") {
 			tags = append(tags, tag)
@@ -108,11 +109,33 @@ func (c *GramController) Discover(writer ResponseWriter, request *Request) {
 
 	user, _ := middleware.CertUserFromRequest(request)
 
-	err = c.discoverTemplate.Execute(writer, user)
+	recentGrams, _, err := c.repo.ListPublic(user.UserID, "", defaults.SectionSize)
+	if err != nil {
+		return
+	}
+
+	recentIntros, _, err := c.repo.ListByTag(user.UserID, "#introduction", "", false, defaults.SectionSize)
+	if err != nil {
+		return
+	}
+
+	toHelperGram := helper.GramFromModel(user.UserID)
+
+	data := struct {
+		helper.User
+		RecentIntros []helper.Gram
+		RecentGrams  []helper.Gram
+	}{
+		RecentIntros: slice.Map(toHelperGram, recentIntros),
+		RecentGrams:  slice.Map(toHelperGram, recentGrams),
+		User:         user,
+	}
+
+	err = c.discoverTemplate.Execute(writer, data)
 }
 
 func (c *GramController) DiscoverRefresh() {
-	fileName := "view/discover_proto.tmpl"
+	fileName := "view/discover.tmpl"
 
 	templates := append([]string{fileName}, c.baseTemplateNames...)
 
@@ -221,7 +244,7 @@ func (c *GramController) TagGet(writer ResponseWriter, request *Request) {
 
 	pageToken := middleware.PageTokenFromRequest(request)
 
-	grams, npt, err := c.repo.ListByTag(user.UserID, tag, pageToken)
+	grams, npt, err := c.repo.ListByTag(user.UserID, tag, pageToken, true)
 
 	data := struct {
 		helper.User

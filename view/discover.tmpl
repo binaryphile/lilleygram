@@ -1,17 +1,34 @@
 {{template "base" . -}}
 {{define "main" -}}
-## Timeline
+# Discover
 
-{{if .Grams -}}
-{{range .Grams -}}
-### {{.UserName}} {{.Avatar}} {{.UpdatedAt}}
-{{.Gram}}
----
+{{if or .RecentGrams .RecentIntros -}}
+{{if .RecentGrams -}}
+## Recent Public Grams
+
+{{range .RecentGrams -}}
+> {{.Body}}
+{{.AuthorUserName}} {{.AuthorAvatar}} {{.UpdatedAt}}
 => /grams/{{.ID}}/sparkle ✨ Sparkle{{if .Sparkles}} ({{.Sparkles}}){{end}}
+{{if and (not .Me) (not .TrackingAuthor) -}}
+=> /users/{{.AuthorID}}/track 🐾 Track
+{{end}}
 
+{{end -}}
+{{end -}}
 
-{{else -}}
----
+{{if .RecentIntros -}}
+## Recent Introductions
+
+{{range .RecentIntros -}}
+> {{.Body}}
+{{.AuthorUserName}} {{.AuthorAvatar}} {{.UpdatedAt}}
+=> /grams/{{.ID}}/sparkle ✨ Sparkle{{if .Sparkles}} ({{.Sparkles}}){{end}}
+{{if and (not .Me) (not .TrackingAuthor) -}}
+=> /users/{{.AuthorID}}/track 🐾 Track
+{{end}}
+
+{{end -}}
 {{end -}}
 {{else -}}
 There's nothing to see here yet!
